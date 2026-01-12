@@ -111,13 +111,8 @@ struct SearchResultsView: View {
                     }
                     .padding(.bottom, 16) // 16px padding
                 }
-                .safeAreaInset(edge: .bottom) {
-                    Color.clear.frame(height: 0) // Bottom safe area inset
-                }
-                .ignoresSafeArea(.container, edges: .bottom)
             }
         }
-        .ignoresSafeArea(.container, edges: .bottom)
         .onAppear {
             searchVisible = true
         }
