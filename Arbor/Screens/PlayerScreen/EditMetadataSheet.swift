@@ -15,11 +15,13 @@ struct EditMetadataSheet: View {
     @Binding var isPresented: Bool
 
     @State private var draftTitle: String = ""
+    @State private var draftScrobbleTitle: String = ""
     @State private var draftArtists: [String] = []
     @State private var editSheetHeight: CGFloat = 0
     @State private var editSheetContentHeight: CGFloat = 0
     @State private var editSheetButtonHeight: CGFloat = 0
     @State private var hasInitialized: Bool = false
+    @State private var isScrobbleTitleOverridden: Bool = false
 
     private struct SheetHeightKey: PreferenceKey {
         static var defaultValue: CGFloat = 0
@@ -46,6 +48,8 @@ struct EditMetadataSheet: View {
     private func initializeDraftsIfNeeded() {
         guard !hasInitialized else { return }
         draftTitle = libraryItem.title
+        draftScrobbleTitle = libraryItem.scrobbleTitle ?? ""
+        isScrobbleTitleOverridden = libraryItem.scrobbleTitle != nil
         draftArtists = libraryItem.artists
         hasInitialized = true
     }
@@ -144,10 +148,15 @@ struct EditMetadataSheet: View {
                     let trimmedArtists = draftArtists
                         .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                         .filter { !$0.isEmpty }
+                    let trimmedScrobbleTitle = draftScrobbleTitle.trimmingCharacters(in: .whitespacesAndNewlines)
                     let nextTitle = draftTitle
                     let nextArtists = trimmedArtists
+                    let nextScrobbleTitle = isScrobbleTitleOverridden && !trimmedScrobbleTitle.isEmpty
+                        ? trimmedScrobbleTitle
+                        : nil
 
                     libraryItem.title = nextTitle
+                    libraryItem.scrobbleTitle = nextScrobbleTitle
                     libraryItem.artists = trimmedArtists
 
                     audioPlayer.updateMetadataTitle(decoratedTitle(for: libraryItem, audioPlayer: audioPlayer))
