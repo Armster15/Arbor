@@ -149,8 +149,12 @@ final class PlayerCoordinator: ObservableObject {
     }
 
     private func makeScrobbleSeed(from libraryItem: LibraryItem) -> ScrobbleSeed {
-        ScrobbleSeed(
-            title: libraryItem.title,
+        let trimmedScrobbleTitle = libraryItem.scrobbleTitle?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = (trimmedScrobbleTitle?.isEmpty == false) ? trimmedScrobbleTitle! : libraryItem.title
+        
+        return ScrobbleSeed(
+            title: title,
             artist: libraryItem.artists.first,
             album: nil
         )
