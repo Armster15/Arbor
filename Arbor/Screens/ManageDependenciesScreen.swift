@@ -98,9 +98,14 @@ struct ManageDependenciesScreen: View {
         .scrollContentBackground(.hidden)
         .safeAreaInset(edge: .bottom) {
             if restartRequired {
-                PrimaryActionButton(title: "Restart Arbor") {
+                Button {
                     requestAppRestart()
+                } label: {
+                    Text("Restart Arbor")
+                        .frame(maxWidth: .infinity)
+                        .padding()
                 }
+                .primaryActionButtonStyle(isLoading: false, isDisabled: false)
                 .padding(.top, 8)
             }
         }
@@ -337,9 +342,14 @@ private struct DependencyUpdateLogView: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) {
             if showRestartButton {
-                PrimaryActionButton(title: "Restart Arbor") {
+                Button {
                     onRestart()
+                } label: {
+                    Text("Restart Arbor")
+                        .frame(maxWidth: .infinity)
+                        .padding()
                 }
+                .primaryActionButtonStyle(isLoading: false, isDisabled: false)
                 .padding(.top, 8)
             }
         }

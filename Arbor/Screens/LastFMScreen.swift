@@ -258,49 +258,57 @@ private struct LoggedOutLastFMView: View {
     
     var body: some View {
         VStack(spacing: 24) {
-            LabeledTextField(
-                label: "Username",
-                placeholder: "Username",
-                text: $username,
-                isSecure: false,
-                textContentType: .username,
-                keyboardType: .asciiCapable,
-                autocapitalization: .never,
-                disableAutocorrection: true
-            )
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Username")
+                    .formFieldLabelStyle()
+
+                TextField("Username", text: $username)
+                    .textContentType(.username)
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
+                    .keyboardType(.asciiCapable)
+                    .formFieldInputStyle()
+            }
+            .formFieldContainer()
             
-            LabeledTextField(
-                label: "Password",
-                placeholder: "Password",
-                text: $password,
-                isSecure: true,
-                textContentType: .password,
-                keyboardType: .asciiCapable,
-                autocapitalization: .never,
-                disableAutocorrection: true
-            )
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Password")
+                    .formFieldLabelStyle()
+
+                SecureField("Password", text: $password)
+                    .textContentType(.password)
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
+                    .keyboardType(.asciiCapable)
+                    .formFieldInputStyle()
+            }
+            .formFieldContainer()
             
-            LabeledTextField(
-                label: "API Key",
-                placeholder: "API Key",
-                text: $apiKey,
-                isSecure: false,
-                textContentType: nil,
-                keyboardType: .asciiCapable,
-                autocapitalization: .never,
-                disableAutocorrection: true
-            )
+            VStack(alignment: .leading, spacing: 8) {
+                Text("API Key")
+                    .formFieldLabelStyle()
+
+                TextField("API Key", text: $apiKey)
+                    .textContentType(nil)
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
+                    .keyboardType(.asciiCapable)
+                    .formFieldInputStyle()
+            }
+            .formFieldContainer()
             
-            LabeledTextField(
-                label: "API Secret",
-                placeholder: "API Secret",
-                text: $apiSecret,
-                isSecure: true,
-                textContentType: nil,
-                keyboardType: .asciiCapable,
-                autocapitalization: .never,
-                disableAutocorrection: true
-            )
+            VStack(alignment: .leading, spacing: 8) {
+                Text("API Secret")
+                    .formFieldLabelStyle()
+
+                SecureField("API Secret", text: $apiSecret)
+                    .textContentType(nil)
+                    .textInputAutocapitalization(.never)
+                    .disableAutocorrection(true)
+                    .keyboardType(.asciiCapable)
+                    .formFieldInputStyle()
+            }
+            .formFieldContainer()
         }
         
         Spacer(minLength: 48)
@@ -312,14 +320,20 @@ private struct LoggedOutLastFMView: View {
                 .padding(.horizontal)
         }
         
-        PrimaryActionButton(
-            title: "Sign In",
-            isLoading: isSubmitting,
-            isDisabled: false,
-            action: {
-                Task { await submit() }
+        Button {
+            Task { await submit() }
+        } label: {
+            HStack(spacing: 12) {
+                if isSubmitting {
+                    ProgressView()
+                }
+
+                Text("Sign In")
             }
-        )
+            .frame(maxWidth: .infinity)
+            .padding()
+        }
+        .primaryActionButtonStyle(isLoading: isSubmitting, isDisabled: false)
         
         HStack(spacing: 12) {
             Button {
