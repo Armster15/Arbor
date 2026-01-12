@@ -188,7 +188,7 @@ private struct LoggedInLastFMView: View {
                         set: { lastFM.isScrobblingEnabled = $0 }
                     )
                 )
-                .tint(colorScheme == .light ? Color("PrimaryBg") : .blue)
+                .tint(colorScheme == .light ? Color("PrimaryBg") : .green)
                 .listRowBackground(Color("SecondaryBg"))
 
                 Section {
