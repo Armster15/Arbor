@@ -87,9 +87,9 @@ struct EditMetadataSheet: View {
                                                 isScrobbleTitleOverridden.toggle()
                                             } label: {
                                                 if isScrobbleTitleOverridden {
-                                                    Label("Override scrobble title", systemImage: "checkmark")
+                                                    Label("Override Scrobble Title", systemImage: "checkmark")
                                                 } else {
-                                                    Text("Override scrobble title")
+                                                    Text("Override Scrobble Title")
                                                 }
                                             }
                                         } label: {
@@ -99,7 +99,7 @@ struct EditMetadataSheet: View {
                                                 .frame(width: 32, height: 44, alignment: .center)
                                                 .contentShape(Rectangle())
                                         }
-                                        .accessibilityLabel("Title options")
+                                        .accessibilityLabel("Title Options")
                                     }
                                 }
                             }
@@ -107,10 +107,10 @@ struct EditMetadataSheet: View {
                             
                             if isScrobbleTitleOverridden && shouldShowScrobbleMenu {
                                 VStack(alignment: .leading, spacing: 8) {
-                                    Text("Scrobble title")
+                                    Text("Scrobble Title")
                                         .formFieldLabelStyle()
                                     
-                                    TextField("Scrobble title", text: $draftScrobbleTitle)
+                                    TextField("Scrobble Title", text: $draftScrobbleTitle)
                                         .textContentType(nil)
                                         .textInputAutocapitalization(.words)
                                         .disableAutocorrection(true)
