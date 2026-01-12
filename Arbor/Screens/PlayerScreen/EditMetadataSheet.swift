@@ -9,6 +9,7 @@ import SwiftUI
 
 struct EditMetadataSheet: View {
     @EnvironmentObject var player: PlayerCoordinator
+    @EnvironmentObject var lastFM: LastFMSession
     @Bindable var libraryItem: LibraryItem
     @ObservedObject var audioPlayer: AudioPlayerWithReverb
     @Environment(\.colorScheme) private var colorScheme
@@ -44,6 +45,10 @@ struct EditMetadataSheet: View {
         let maxSheetHeight = UIScreen.main.bounds.height * 0.9
         let targetHeight = editSheetContentHeight + editSheetButtonHeight
         return min(max(targetHeight, 280), maxSheetHeight)
+    }
+
+    private var shouldShowScrobbleMenu: Bool {
+        lastFM.isAuthenticated && lastFM.isScrobblingEnabled && lastFM.manager != nil
     }
 
     private func initializeDraftsIfNeeded() {
@@ -84,24 +89,26 @@ struct EditMetadataSheet: View {
                                     .foregroundStyle(Color("PrimaryText"))
                                     .tint(Color("PrimaryText"))
 
-                                Menu {
-                                    Button {
-                                        isScrobbleTitleOverridden.toggle()
-                                    } label: {
-                                        if isScrobbleTitleOverridden {
-                                            Label("Override scrobble title", systemImage: "checkmark")
-                                        } else {
-                                            Text("Override scrobble title")
+                                if shouldShowScrobbleMenu {
+                                    Menu {
+                                        Button {
+                                            isScrobbleTitleOverridden.toggle()
+                                        } label: {
+                                            if isScrobbleTitleOverridden {
+                                                Label("Override scrobble title", systemImage: "checkmark")
+                                            } else {
+                                                Text("Override scrobble title")
+                                            }
                                         }
+                                    } label: {
+                                        Image(systemName: "ellipsis")
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundStyle(Color("PrimaryText"))
+                                            .frame(width: 32, height: 44, alignment: .center)
+                                            .contentShape(Rectangle())
                                     }
-                                } label: {
-                                    Image(systemName: "ellipsis")
-                                        .font(.system(size: 18, weight: .semibold))
-                                        .foregroundStyle(Color("PrimaryText"))
-                                        .frame(width: 32, height: 44, alignment: .center)
-                                        .contentShape(Rectangle())
+                                    .accessibilityLabel("Title options")
                                 }
-                                .accessibilityLabel("Title options")
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
