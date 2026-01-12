@@ -16,6 +16,7 @@ class LibraryItem {
     // to have default values or be optional.
     var original_url: String = "N/A"
     var title: String = "N/A"
+    var scrobbleTitle: String?
     var artists: [String] = []
     var thumbnail_url: String?
     var thumbnail_width: Int?
@@ -28,6 +29,7 @@ class LibraryItem {
     init(
         original_url: String,
         title: String,
+        scrobbleTitle: String? = nil,
         artists: [String],
         thumbnail_url: String?,
         thumbnail_width: Int?,
@@ -40,6 +42,7 @@ class LibraryItem {
 
         self.original_url = original_url
         self.title = title
+        self.scrobbleTitle = scrobbleTitle
         self.artists = artists
         self.thumbnail_url = thumbnail_url
         self.thumbnail_width = thumbnail_width
@@ -59,6 +62,7 @@ class LibraryItem {
         self.init(
             original_url: meta.original_url,
             title: meta.title,
+            scrobbleTitle: nil,
             artists: meta.artists,
             thumbnail_url: meta.thumbnail_url,
             thumbnail_width: meta.thumbnail_width,
@@ -74,6 +78,7 @@ class LibraryItem {
         self.init(
             original_url: item.original_url,
             title: item.title,
+            scrobbleTitle: item.scrobbleTitle,
             artists: item.artists,
             thumbnail_url: item.thumbnail_url,
             thumbnail_width: item.thumbnail_width,
