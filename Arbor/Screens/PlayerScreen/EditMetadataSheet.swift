@@ -11,6 +11,7 @@ struct EditMetadataSheet: View {
     @EnvironmentObject var player: PlayerCoordinator
     @Bindable var libraryItem: LibraryItem
     @ObservedObject var audioPlayer: AudioPlayerWithReverb
+    @Environment(\.colorScheme) private var colorScheme
     let onLyricsInvalidated: () -> Void
     @Binding var isPresented: Bool
 
@@ -63,16 +64,62 @@ struct EditMetadataSheet: View {
                         .padding(.top, 24)
 
                     VStack(spacing: 24) {
-                        LabeledTextField(
-                            label: "Title",
-                            placeholder: "Title",
-                            text: $draftTitle,
-                            isSecure: false,
-                            textContentType: nil,
-                            keyboardType: .default,
-                            autocapitalization: .words,
-                            disableAutocorrection: true
-                        )
+                        VStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Title")
+                                .fontWeight(.semibold)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Color("PrimaryText"))
+
+                            HStack(alignment: .center, spacing: 12) {
+                                TextField("Title", text: $draftTitle)
+                                    .textContentType(nil)
+                                    .textInputAutocapitalization(.words)
+                                    .disableAutocorrection(true)
+                                    .keyboardType(.default)
+                                    .padding(12)
+                                    .background(colorScheme == .light ? Color("Elevated") : Color.clear)
+                                    .glassEffect()
+                                    .cornerRadius(24)
+                                    .foregroundStyle(Color("PrimaryText"))
+                                    .tint(Color("PrimaryText"))
+
+                                Menu {
+                                    Button {
+                                        isScrobbleTitleOverridden.toggle()
+                                    } label: {
+                                        if isScrobbleTitleOverridden {
+                                            Label("Override scrobble title", systemImage: "checkmark")
+                                        } else {
+                                            Text("Override scrobble title")
+                                        }
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(Color("PrimaryText"))
+                                        .frame(width: 32, height: 44, alignment: .center)
+                                        .contentShape(Rectangle())
+                                }
+                                .accessibilityLabel("Title options")
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+
+                        if isScrobbleTitleOverridden {
+                            LabeledTextField(
+                                label: "Scrobble title",
+                                    placeholder: "Scrobble title",
+                                    text: $draftScrobbleTitle,
+                                    isSecure: false,
+                                    textContentType: nil,
+                                    keyboardType: .default,
+                                    autocapitalization: .words,
+                                    disableAutocorrection: true
+                                )
+                            }
+                        }
 
                         VStack(spacing: 12) {
                             ForEach(draftArtists.indices, id: \.self) { index in
