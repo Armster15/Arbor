@@ -105,7 +105,7 @@ struct EditMetadataSheet: View {
                             }
                             .formFieldContainer()
                             
-                            if isScrobbleTitleOverridden {
+                            if isScrobbleTitleOverridden && shouldShowScrobbleMenu {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Scrobble title")
                                         .formFieldLabelStyle()
