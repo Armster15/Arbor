@@ -9,7 +9,11 @@ import SwiftUI
 
 struct EditMetadataSheet: View {
     @EnvironmentObject var player: PlayerCoordinator
-    @EnvironmentObject var lastFM: LastFMSession
+    
+    // HACKHACK: environment objects behave weirdly in sheets so pass directly as param
+    // https://stackoverflow.com/questions/60159490/swiftui-passing-an-environmentobject-to-a-sheet-causes-update-problems
+    @ObservedObject var lastFM: LastFMSession
+    
     @Bindable var libraryItem: LibraryItem
     @ObservedObject var audioPlayer: AudioPlayerWithReverb
     let onLyricsInvalidated: () -> Void
