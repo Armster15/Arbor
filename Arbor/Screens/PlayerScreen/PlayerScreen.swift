@@ -211,10 +211,6 @@ struct __PlayerScreen: View {
             lyricsState = .idle
             fetchLyricsIfNeeded()
         }
-        .onAppear {
-            print("PlayerScreen onAppear")
-            print("lastFM: \(lastFM)")
-        }
         .sheet(isPresented: $isEditSheetPresented) {
             ZStack {
                 EditMetadataSheet(
