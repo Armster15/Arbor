@@ -66,6 +66,8 @@ struct __PlayerScreen: View {
     @State private var savedPitchCents: Float?
     @State private var savedReverbMix: Float?
 
+    @EnvironmentObject var lastFM: LastFMSession
+
     @Environment(\.modelContext) var modelContext
 
     private enum LyricsState: Equatable {
@@ -210,12 +212,15 @@ struct __PlayerScreen: View {
             fetchLyricsIfNeeded()
         }
         .sheet(isPresented: $isEditSheetPresented) {
-            EditMetadataSheet(
-                libraryItem: libraryItem,
-                audioPlayer: audioPlayer,
-                onLyricsInvalidated: { fetchLyricsIfNeeded() },
-                isPresented: $isEditSheetPresented
-            )
+            ZStack {
+                EditMetadataSheet(
+                    lastFM: lastFM,
+                    libraryItem: libraryItem,
+                    audioPlayer: audioPlayer,
+                    onLyricsInvalidated: { fetchLyricsIfNeeded() },
+                    isPresented: $isEditSheetPresented
+                )
+            }
         }
         .fullScreenCover(isPresented: $isLyricsFullScreenPresented, onDismiss: {
             activeLyricsPayload = nil
