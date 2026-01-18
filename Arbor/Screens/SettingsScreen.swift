@@ -131,26 +131,42 @@ private struct SyncStatusRow: View {
     @ObservedObject var syncMonitor: SyncMonitor
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: syncMonitor.syncStateSummary.symbolName)
-                .font(.title2)
-                .foregroundColor(syncMonitor.syncStateSummary.symbolColor)
-                .frame(width: 28)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("iCloud Sync")
-                    .font(.headline)
-                    .foregroundColor(Color("PrimaryText"))
-
-                Text(syncMonitor.syncStateSummary.description)
-                    .font(.subheadline)
-                    .foregroundColor(Color("PrimaryText").opacity(0.8))
+        Button {
+            if syncMonitor.hasSyncError {
+                if let error = syncMonitor.setupError {
+                    showAlert(title: "iCloud Sync Error", message: "Unable to set up iCloud sync, changes won't be saved! \(error.localizedDescription)")
+                }
+                if let error = syncMonitor.importError {
+                    showAlert(title: "iCloud Sync Error", message: "Import is broken: \(error.localizedDescription)")
+                }
+                if let error = syncMonitor.exportError {
+                    showAlert(title: "iCloud Sync Error", message: "Export is broken - your changes aren't being saved! \(error.localizedDescription)")
+                }
+            } else if syncMonitor.isNotSyncing {
+                showAlert(title: "iCloud Sync Error", message: "Sync should be working, but isn't. Look for a badge on Settings or other possible issues.")
             }
+        } label: {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: syncMonitor.syncStateSummary.symbolName)
+                    .font(.title2)
+                    .foregroundColor(syncMonitor.syncStateSummary.symbolColor)
+                    .frame(width: 28)
 
-            Spacer()
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("iCloud Sync")
+                        .font(.headline)
+                        .foregroundColor(Color("PrimaryText"))
 
-            if syncMonitor.syncStateSummary.isInProgress {
-                ProgressView()
+                    Text(syncMonitor.syncStateSummary.description)
+                        .font(.subheadline)
+                        .foregroundColor(Color("PrimaryText").opacity(0.8))
+                }
+
+                Spacer()
+
+                if syncMonitor.syncStateSummary.isInProgress {
+                    ProgressView()
+                }
             }
         }
     }
