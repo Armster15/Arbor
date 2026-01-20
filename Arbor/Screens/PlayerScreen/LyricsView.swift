@@ -368,6 +368,12 @@ private struct LyricsLinesView: View {
                     isAutoScrollEnabled = false
                 }
             )
+            .onScrollPhaseChange { _, newPhase, _ in
+                guard allowsUserScroll, payload.timed else { return }
+                if newPhase == .interacting || newPhase == .tracking {
+                    isAutoScrollEnabled = false
+                }
+            }
             .onChange(of: isAutoScrollEnabled) { _, newValue in
                 guard payload.timed, newValue else { return }
                 scrollToActiveLyric(proxy, activeIndex: activeIndex, shouldAnimate: true)
