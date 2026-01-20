@@ -209,14 +209,14 @@ struct __PlayerScreen: View {
             lyricsState = .idle
             fetchLyricsIfNeeded()
         }
-        .sheet(isPresented: $isEditSheetPresented) {
+        .background(
             EditMetadataSheet(
                 libraryItem: libraryItem,
                 audioPlayer: audioPlayer,
                 onLyricsInvalidated: { fetchLyricsIfNeeded() },
                 isPresented: $isEditSheetPresented
             )
-        }
+        )
         .fullScreenCover(isPresented: $isLyricsFullScreenPresented, onDismiss: {
             activeLyricsPayload = nil
         }) {
