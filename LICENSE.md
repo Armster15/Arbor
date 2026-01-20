@@ -1,4 +1,6 @@
-# Source Code
+# License
+
+## Source Code
 
 MIT License
 
@@ -22,7 +24,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-# App Icon
+## App Icon
 
 The app icon, located in the directory `AppIcon.icon`, is licensed under the [Creative Commons Attribution 4.0 International License (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/deed.en).
 
