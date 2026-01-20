@@ -7,11 +7,38 @@
 
 import SwiftUI
 
+// HACKHACK: environment objects behave weirdly in sheets so we need to pass them directly as params.
+// This wrapper view is used to pass the environment objects directly as params.
+// https://stackoverflow.com/questions/60159490/swiftui-passing-an-environmentobject-to-a-sheet-causes-update-problems
 struct EditMetadataSheet: View {
-    @EnvironmentObject var player: PlayerCoordinator
-    @EnvironmentObject var lastFM: LastFMSession
     @Bindable var libraryItem: LibraryItem
     @ObservedObject var audioPlayer: AudioPlayerWithReverb
+    let onLyricsInvalidated: () -> Void
+    @Binding var isPresented: Bool
+    
+    @EnvironmentObject var player: PlayerCoordinator
+    @EnvironmentObject var lastFM: LastFMSession
+
+    var body: some View {
+        EmptyView()
+            .sheet(isPresented: $isPresented) {
+                __EditMetadataSheet(
+                    libraryItem: libraryItem,
+                    audioPlayer: audioPlayer,
+                    player: player,
+                    lastFM: lastFM,
+                    onLyricsInvalidated: onLyricsInvalidated,
+                    isPresented: $isPresented
+                )
+            }
+    }
+}
+
+struct __EditMetadataSheet: View {
+    @Bindable var libraryItem: LibraryItem
+    @ObservedObject var audioPlayer: AudioPlayerWithReverb
+    let player: PlayerCoordinator
+    let lastFM: LastFMSession
     let onLyricsInvalidated: () -> Void
     @Binding var isPresented: Bool
     
