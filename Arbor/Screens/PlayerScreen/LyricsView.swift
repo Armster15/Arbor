@@ -224,7 +224,10 @@ private struct LyricsLinesView: View {
         activeIndex: Int?,
         shouldAnimate: Bool
     ) {
-        guard let activeIndex else { return }
+        guard let activeIndex else {
+            scrollToTop(proxy, shouldAnimate: shouldAnimate)
+            return
+        }
         lastActiveLyricIndex = activeIndex
         if shouldAnimate {
             withAnimation(.easeOut(duration: 0.3)) {
@@ -232,6 +235,18 @@ private struct LyricsLinesView: View {
             }
         } else {
             proxy.scrollTo(activeIndex, anchor: .center)
+        }
+    }
+
+    private func scrollToTop(_ proxy: ScrollViewProxy, shouldAnimate: Bool) {
+        guard !payload.lines.isEmpty else { return }
+        lastActiveLyricIndex = 0
+        if shouldAnimate {
+            withAnimation(.easeOut(duration: 0.3)) {
+                proxy.scrollTo(0, anchor: .top)
+            }
+        } else {
+            proxy.scrollTo(0, anchor: .top)
         }
     }
 
