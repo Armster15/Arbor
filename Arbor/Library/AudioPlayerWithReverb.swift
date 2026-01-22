@@ -306,6 +306,11 @@ final class AudioPlayerWithReverb: ObservableObject {
         updateNowPlayingInfo()
 
         let commandCenter = MPRemoteCommandCenter.shared()
+        // Remove built-in handlers from SwiftAudioPlayer so macOS/AirPods toggles always route through our ramping logic.
+        commandCenter.togglePlayPauseCommand.removeTarget(nil)
+        commandCenter.previousTrackCommand.removeTarget(nil)
+        commandCenter.nextTrackCommand.removeTarget(nil)
+        
         commandCenter.playCommand.isEnabled = true
         commandCenter.pauseCommand.isEnabled = true
         commandCenter.togglePlayPauseCommand.isEnabled = true
