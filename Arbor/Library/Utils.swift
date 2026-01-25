@@ -43,6 +43,23 @@ public func formatArtists(_ artists: [String]) -> String {
     return cleaned.isEmpty ? "N/A" : cleaned.joined(separator: ", ")
 }
 
+extension UIImage {
+    func croppedToSquare() -> UIImage {
+        let sideLength = min(size.width, size.height)
+        guard sideLength > 0 else { return self }
+        let originX = (size.width - sideLength) * 0.5
+        let originY = (size.height - sideLength) * 0.5
+        let cropRect = CGRect(
+            x: originX * scale,
+            y: originY * scale,
+            width: sideLength * scale,
+            height: sideLength * scale
+        )
+        guard let cgImage = cgImage?.cropping(to: cropRect) else { return self }
+        return UIImage(cgImage: cgImage, scale: scale, orientation: imageOrientation)
+    }
+}
+
 // Saving images to photos library is at its core simply just UIImageWriteToSavedPhotosAlbum(uiImage, nil, nil, nil),
 // but because of some historic Objective-C lore, we need a class for other functionality like error handling.
 // https://www.hackingwithswift.com/books/ios-swiftui/how-to-save-images-to-the-users-photo-library
