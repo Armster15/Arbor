@@ -462,13 +462,14 @@ final class AudioPlayerWithReverb: ObservableObject {
         updateNowPlayingInfo()
     }
 
-    func updateMetadataArtwork(url: URL) {
+    func updateMetadataArtwork(url: URL, thumbnailIsSquare: Bool?) {
         SDWebImageManager.shared.loadImage(with: url, options: [.highPriority, .retryFailed, .scaleDownLargeImages], progress: nil) { image, _, error, _, finished, _ in
             guard error == nil, finished, let image else {
                 print("Failed to load artwork via SDWebImage: \(error?.localizedDescription ?? "Unknown error")")
                 return
             }
-            self.metaArtwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+            let finalImage = thumbnailIsSquare == false ? image.croppedToSquare() : image
+            self.metaArtwork = MPMediaItemArtwork(boundsSize: finalImage.size) { _ in finalImage }
             
             self.updateNowPlayingInfo()
         }

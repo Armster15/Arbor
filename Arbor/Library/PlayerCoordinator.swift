@@ -87,7 +87,10 @@ final class PlayerCoordinator: ObservableObject {
         newAudioPlayer.updateMetadataTitle(libraryItem.title)
         newAudioPlayer.updateMetadataArtist(formatArtists(libraryItem.artists))
         if let artworkURL = artworkURL {
-            newAudioPlayer.updateMetadataArtwork(url: artworkURL)
+            newAudioPlayer.updateMetadataArtwork(
+                url: artworkURL,
+                thumbnailIsSquare: libraryItem.thumbnail_is_square
+            )
         }
         // Apply audio parameters from the library item
         newAudioPlayer.setSpeedRate(libraryItem.speedRate)

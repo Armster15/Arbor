@@ -76,8 +76,9 @@ struct SongImage: View {
 
     private var squareSide: CGFloat { min(width, height) }
     private var cornerRadiusValue: CGFloat { isLarge ? 12 : 8 }
-    private var frameWidth: CGFloat { thumbnailForceSquare ? squareSide : width }
-    private var frameHeight: CGFloat { thumbnailForceSquare ? squareSide : height }
+    private var shouldCropToSquare: Bool { thumbnailForceSquare || thumbnailIsSquare == false }
+    private var frameWidth: CGFloat { shouldCropToSquare ? squareSide : width }
+    private var frameHeight: CGFloat { shouldCropToSquare ? squareSide : height }
 
     var body: some View {
         if let thumbnailUrl = thumbnailURL, thumbnailIsSquare != nil {
@@ -90,7 +91,11 @@ struct SongImage: View {
                     .cornerRadius(cornerRadiusValue)
                     .shadow(color: .black.opacity(isLarge ? 0.15 : 0), radius: 6, x: 0, y: 2)
             } else if tappableForViewer {
-                TappableImageView(url: URL(string: thumbnailUrl), cornerRadius: cornerRadiusValue)
+                TappableImageView(
+                    url: URL(string: thumbnailUrl),
+                    thumbnailIsSquare: thumbnailIsSquare,
+                    cornerRadius: cornerRadiusValue
+                )
                     .frame(width: frameWidth, height: frameHeight)
                     .shadow(color: .black.opacity(isLarge ? 0.15 : 0), radius: 6, x: 0, y: 2)
             } else {
@@ -151,6 +156,7 @@ struct SaveCoverToPhotosButton: View {
 // So we can use ImageViewer.swift with SwiftUI
 struct TappableImageView: UIViewRepresentable {
     let url: URL?
+    let thumbnailIsSquare: Bool?
     var cornerRadius: CGFloat = 12
 
     func makeUIView(context: Context) -> UIView {
@@ -167,8 +173,21 @@ struct TappableImageView: UIViewRepresentable {
         container.addSubview(imageView)
         
         if let url = url {
-            imageView.sd_setImage(with: url)
-            imageView.setupImageViewer(url: url, options: [.theme(.dark)])
+            if thumbnailIsSquare == false {
+                SDWebImageManager.shared.loadImage(with: url, options: [.highPriority, .retryFailed, .scaleDownLargeImages], progress: nil) { image, _, error, _, finished, _ in
+                    guard error == nil, finished, let image else {
+                        imageView.sd_setImage(with: url)
+                        imageView.setupImageViewer(url: url, options: [.theme(.dark)])
+                        return
+                    }
+                    let cropped = image.croppedToSquare()
+                    imageView.image = cropped
+                    imageView.setupImageViewer(images: [cropped], options: [.theme(.dark)])
+                }
+            } else {
+                imageView.sd_setImage(with: url)
+                imageView.setupImageViewer(url: url, options: [.theme(.dark)])
+            }
         }
         return container
     }
