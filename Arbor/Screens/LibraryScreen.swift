@@ -178,7 +178,8 @@ struct LibraryScreen: View {
                         set: { newValue in
                             downloadSource = newValue
                         }
-                    )
+                    ),
+                    clearSelectionOnFailure: false
                 )
                 .background(BackgroundColor.ignoresSafeArea(.all))
             } else {

@@ -207,6 +207,7 @@ struct SearchResultRow: View {
 struct DownloadScreen: View {
     let onDownloaded: (DownloadMeta) -> Void
     @Binding var selectedResult: SearchResult?
+    var clearSelectionOnFailure: Bool = true
     
     @State private var isLoading: Bool = false
     @State private var idleOpacity: Double = 1.0
@@ -339,7 +340,9 @@ struct DownloadScreen: View {
                     downloadErrorMessage = message
                     downloadLogText = logText
                     showDownloadErrorAlert = true
-                    self.selectedResult = nil
+                    if clearSelectionOnFailure {
+                        self.selectedResult = nil
+                    }
                 }
             }
         }
