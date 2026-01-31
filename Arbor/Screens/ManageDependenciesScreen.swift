@@ -172,11 +172,24 @@ struct ManageDependenciesScreen: View {
     private var updateResultRow: some View {
         if updateStatus == .success || updateStatus == .failure {
             NavigationLink {
-                DependencyUpdateLogView(
+                LogViewer(
+                    title: "Update Logs",
                     logText: updateLog,
-                    showRestartButton: restartRequired,
-                    onRestart: requestAppRestart
+                    showClose: false
                 )
+                .safeAreaInset(edge: .bottom) {
+                    if restartRequired {
+                        Button {
+                            requestAppRestart()
+                        } label: {
+                            Text("Restart Arbor")
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                        }
+                        .primaryActionButtonStyle(isLoading: false, isDisabled: false)
+                        .padding(.top, 8)
+                    }
+                }
             } label: {
                 Text(updateStatus == .success ? "Update complete" : "Update failed")
             }
@@ -322,36 +335,3 @@ result = "ok"
     }
 }
 
-private struct DependencyUpdateLogView: View {
-    let logText: String?
-    let showRestartButton: Bool
-    let onRestart: () -> Void
-
-    var body: some View {
-        let displayText = logText?.isEmpty == false ? (logText ?? "") : "No update logs yet."
-        ScrollView {
-            Text(displayText)
-                .font(.system(.footnote, design: .monospaced))
-                .foregroundColor(Color("PrimaryText"))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(16)
-        }
-        .background(BackgroundColor.ignoresSafeArea())
-        .navigationTitle("Update Logs")
-        .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
-            if showRestartButton {
-                Button {
-                    onRestart()
-                } label: {
-                    Text("Restart Arbor")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                }
-                .primaryActionButtonStyle(isLoading: false, isDisabled: false)
-                .padding(.top, 8)
-            }
-        }
-    }
-}

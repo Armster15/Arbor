@@ -210,6 +210,10 @@ struct DownloadScreen: View {
     
     @State private var isLoading: Bool = false
     @State private var idleOpacity: Double = 1.0
+    @State private var showDownloadErrorAlert = false
+    @State private var downloadErrorMessage = ""
+    @State private var downloadLogText: String? = nil
+    @State private var showDownloadLogSheet = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -260,6 +264,25 @@ struct DownloadScreen: View {
             }
         }
         .padding()
+        .alert("Download Failed", isPresented: $showDownloadErrorAlert) {
+            if downloadLogText?.isEmpty == false {
+                Button("View Logs") {
+                    showDownloadLogSheet = true
+                }
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(downloadErrorMessage)
+        }
+        .sheet(isPresented: $showDownloadLogSheet) {
+            NavigationStack {
+                LogViewer(
+                    title: "View Logs",
+                    logText: downloadLogText,
+                    showClose: true
+                )
+            }
+        }
         .onAppear {
             triggerDownloadIfPossible()
         }
@@ -277,6 +300,8 @@ struct DownloadScreen: View {
     
     private func downloadAudio(with url: String) {
         isLoading = true
+        downloadLogText = nil
+        showDownloadLogSheet = false
         
         AudioDownloader.download(from: url, searchResult: selectedResult) { result in
             DispatchQueue.main.async {
@@ -289,15 +314,21 @@ struct DownloadScreen: View {
                     
                 case .failure(let error):
                     var message: String
+                    var logText: String? = nil
                     
                     if let downloadError = error as? DownloadError {
                         switch downloadError {
                         case .invalidSelection:
                             message = "Invalid selection."
-                        case .emptyResult:
+                        case .emptyResult(let log):
                             message = "Failed to download audio. Please check the URL and try again."
-                        case .invalidResponse:
+                            logText = log
+                        case .invalidResponse(let log):
                             message = "Invalid response from downloader."
+                            logText = log
+                        case .pythonFailed(let log):
+                            message = "Failed to download audio. Please check the URL and try again."
+                            logText = log
                         }
                     } else {
                         message = "Failed to download audio. Please check the URL and try again."
@@ -305,7 +336,9 @@ struct DownloadScreen: View {
 
                     message += "\n\nIf the problem persists, try updating the dependencies in Settings."
 
-                    showAlert(title: "Download Failed", message: message)
+                    downloadErrorMessage = message
+                    downloadLogText = logText
+                    showDownloadErrorAlert = true
                     self.selectedResult = nil
                 }
             }
