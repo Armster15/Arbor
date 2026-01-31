@@ -1,8 +1,6 @@
 from pathlib import Path
 from .pip_exec import pip_exec
-import contextlib
 import importlib.metadata as metadata
-import io
 import re
 import shutil
 import traceback
@@ -19,31 +17,25 @@ updated_python_modules_dir = application_support_dir / "updated_python_modules"
 requirements_txt_path = root_dir / "requirements.txt"
 
 
-def update_pkgs() -> tuple[bool, str]:
-    log_buffer = io.StringIO()
+def update_pkgs() -> bool:
+    try:
+        result = pip_exec(
+            [
+                "install",
+                "--platform=any",
+                "--only-binary=:all:",
+                "--upgrade",
+                "--target=" + str(updated_python_modules_dir),
+                "-r",
+                str(requirements_txt_path),
+            ]
+        )
+        success = result == 0
+    except Exception:
+        success = False
+        traceback.print_exc()
 
-    with contextlib.redirect_stdout(log_buffer), contextlib.redirect_stderr(log_buffer):
-        try:
-            result = pip_exec(
-                [
-                    "install",
-                    "--platform=any",
-                    "--only-binary=:all:",
-                    "--upgrade",
-                    "--target=" + str(updated_python_modules_dir),
-                    "-r",
-                    str(requirements_txt_path),
-                ]
-            )
-            success = result == 0
-
-        except Exception:
-            success = False
-            traceback.print_exc()
-
-    log_text = log_buffer.getvalue()
-
-    return success, log_text
+    return success
 
 
 def are_pkgs_updated() -> bool:

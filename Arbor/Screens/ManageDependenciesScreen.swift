@@ -244,8 +244,8 @@ result = json.dumps(get_dependency_versions())
         updateStatus = .running
         let code = """
 import json
-from arbor import update_pkgs
-success, log = update_pkgs()
+from arbor import capture_logs, update_pkgs
+success, log = capture_logs(update_pkgs)
 result = json.dumps({"success": success, "log": log})
 """
         pythonExecAndGetStringAsync(code, "result") { result in
