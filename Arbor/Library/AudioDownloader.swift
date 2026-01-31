@@ -9,11 +9,17 @@ import Foundation
 
 enum DownloadError: Error {
     case invalidSelection
-    case emptyResult
-    case invalidResponse
+    case emptyResult(log: String?)
+    case invalidResponse(log: String?)
+    case pythonFailed(log: String)
 }
 
 struct AudioDownloader {
+    private struct DownloadResponse: Decodable {
+        let result: String?
+        let log: String
+    }
+
     static func download(
         from url: String,
         searchResult: SearchResult? = nil,
@@ -51,8 +57,10 @@ struct AudioDownloader {
             .replacingOccurrences(of: "'", with: "\\'")
 
         let code = """
-from arbor import download
-result = download('\(escaped)')
+import json
+from arbor import capture_logs, download
+result, log = capture_logs(download, '\(escaped)')
+result = json.dumps({"result": result, "log": log})
 """
 
         pythonExecAndGetStringAsync(
@@ -60,13 +68,24 @@ result = download('\(escaped)')
             "result"
         ) { result in
             guard let output = result, !output.isEmpty else {
-                completion(.failure(DownloadError.emptyResult))
+                completion(.failure(DownloadError.emptyResult(log: nil)))
                 return
             }
 
             guard let data = output.data(using: .utf8),
-                  let meta = try? JSONDecoder().decode(DownloadMeta.self, from: data) else {
-                completion(.failure(DownloadError.invalidResponse))
+                  let response = try? JSONDecoder().decode(DownloadResponse.self, from: data) else {
+                completion(.failure(DownloadError.invalidResponse(log: output)))
+                return
+            }
+
+            guard let resultJSON = response.result, !resultJSON.isEmpty else {
+                completion(.failure(DownloadError.pythonFailed(log: response.log)))
+                return
+            }
+
+            guard let resultData = resultJSON.data(using: .utf8),
+                  let meta = try? JSONDecoder().decode(DownloadMeta.self, from: resultData) else {
+                completion(.failure(DownloadError.invalidResponse(log: response.log)))
                 return
             }
 
@@ -74,4 +93,3 @@ result = download('\(escaped)')
         }
     }
 }
-
