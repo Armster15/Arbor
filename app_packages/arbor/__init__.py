@@ -1,3 +1,4 @@
+from .capture_logs import capture_logs
 from .download import download
 from .genius import get_lyrics_from_genius
 from .lyrics import get_lyrics_from_youtube
