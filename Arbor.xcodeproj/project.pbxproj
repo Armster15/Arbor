@@ -208,7 +208,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Type a script or drag a script file from your workspace to insert its path.\nset -e\n\n# Copying up to date Python app resources into the app bundle. Required for \"cache busting\"\nrsync -au --delete $PROJECT_DIR/app/ $CODESIGNING_FOLDER_PATH/app/\nrsync -au --delete $PROJECT_DIR/app_packages/ $CODESIGNING_FOLDER_PATH/app_packages/\nrsync -au --delete $PROJECT_DIR/python_modules/ $CODESIGNING_FOLDER_PATH/python_modules/\n\n# Skip Python XCframework processing on Mac Catalyst (it assumes iOS-style layout/signing).\nif [ \"$EFFECTIVE_PLATFORM_NAME\" = \"-maccatalyst\" ] || [ \"$PLATFORM_FAMILY_NAME\" = \"mac\" ]; then\n    echo \"Skipping Python XCframework processing for Mac Catalyst\"\n    exit 0\nfi\n\nsource $PROJECT_DIR/Python.xcframework/build/utils.sh\ninstall_python Python.xcframework app app_packages python_modules\n\n";
+			shellScript = "# Type a script or drag a script file from your workspace to insert its path.\nset -e\n\n# Copying up to date Python app resources into the app bundle. Required for \"cache busting\"\nrsync -au --delete $PROJECT_DIR/app/ $CODESIGNING_FOLDER_PATH/app/\nrsync -au --delete $PROJECT_DIR/app_packages/ $CODESIGNING_FOLDER_PATH/app_packages/\nrsync -au --delete $PROJECT_DIR/python_modules/ $CODESIGNING_FOLDER_PATH/python_modules/\n\n# Skip Python.xcframework processing on Mac Catalyst\nif [ \"$EFFECTIVE_PLATFORM_NAME\" = \"-maccatalyst\" ]; then\n    echo \"Skipping Python.xcframework processing for Mac Catalyst\"\n    exit 0\nfi\n\nsource $PROJECT_DIR/Python.xcframework/build/utils.sh\ninstall_python Python.xcframework app app_packages python_modules\n\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
