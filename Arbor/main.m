@@ -10,6 +10,49 @@
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <TargetConditionals.h>
+
+#if TARGET_OS_MACCATALYST
+typedef struct _object PyObject;
+
+void crash_dialog(NSString *details) {
+    NSLog(@"%@", details);
+}
+
+NSString *format_traceback(PyObject *type, PyObject *value, PyObject *traceback) {
+    (void)type;
+    (void)value;
+    (void)traceback;
+    return @"";
+}
+
+int start_python_runtime(int argc, char *argv[]) {
+    (void)argc;
+    (void)argv;
+    return 0;
+}
+
+void finalize_python_runtime(void) {}
+
+int pythonRunSimpleString(NSString *code) {
+    (void)code;
+    return 0;
+}
+
+NSString *pythonExecAndGetString(NSString *code, NSString *variableName) {
+    (void)code;
+    (void)variableName;
+    return @"";
+}
+
+void pythonExecAndGetStringAsync(NSString *code, NSString *variableName, void (^completion)(NSString *result)) {
+    (void)code;
+    (void)variableName;
+    if (completion) {
+        completion(@"");
+    }
+}
+#else
 #include <Python/Python.h>
 #include <dlfcn.h>
 
@@ -539,3 +582,4 @@ void pythonExecAndGetStringAsync(NSString *code, NSString *variableName, void (^
         }
     });
 }
+#endif

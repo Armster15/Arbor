@@ -14,8 +14,8 @@
 		0860103D2EF7BD4700B1C8F2 /* ScrobbleKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0860103C2EF7BD4700B1C8F2 /* ScrobbleKit */; };
 		087DB67B2F106DEB0092F72C /* requirements.txt in Resources */ = {isa = PBXBuildFile; fileRef = 087DB67A2F106DEB0092F72C /* requirements.txt */; };
 		0893EA0C2EA61E4B00E00181 /* SDWebImageSwiftUI in Frameworks */ = {isa = PBXBuildFile; productRef = 0893EA0B2EA61E4B00E00181 /* SDWebImageSwiftUI */; };
-		08C4FFF92EA1461C00F9F26C /* Python.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 08C4FFF72EA1455D00F9F26C /* Python.xcframework */; };
-		08C4FFFA2EA1461C00F9F26C /* Python.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 08C4FFF72EA1455D00F9F26C /* Python.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		08C4FFF92EA1461C00F9F26C /* Python.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 08C4FFF72EA1455D00F9F26C /* Python.xcframework */; platformFilter = ios; settings = {ATTRIBUTES = (Required, ); }; };
+		08C4FFFA2EA1461C00F9F26C /* Python.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 08C4FFF72EA1455D00F9F26C /* Python.xcframework */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		08D35D592F08BD800026EEE2 /* CloudKitSyncMonitor in Frameworks */ = {isa = PBXBuildFile; productRef = 08D35D582F08BD800026EEE2 /* CloudKitSyncMonitor */; };
 		08D3D2AF2F06273500D65F2E /* SwiftAudioPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 08D3D2AE2F06273500D65F2E /* SwiftAudioPlayer */; };
 /* End PBXBuildFile section */
