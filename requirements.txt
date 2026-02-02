@@ -1,10 +1,22 @@
 # The dependencies should be versioned such that we can use the 
 # latest version of the dependency compatible with the embedded Python version
 
+# Note about pip: pip is not version-locked because it supports all Python versions that are *not* end-of-life 
+# (https://pip.pypa.io/en/stable/development/release-process/#python-support-policy).
+#
+# Additionally, pip's versioning does not follow semver: it instead is versioned as `YY.N`, where `YY` is the 
+# year of the release and N identifies the quarter of the year (0-3). There are four pip releases every year: 
+# January, April, July, and October.
+#
+# Python 3.14, which is the embedded Python version released as of February 2026, is set to reach end-of-life 
+# in October 2030, more than 4 years from now (https://devguide.python.org/versions/).
+#
+# Therefore, it doesn't make sense to version-lock pip.
+
 beautifulsoup4>=4.0.0,<5.0.0
 googletrans>=4.0.0,<5.0.0
-packaging>=25.0.0,<26.0.0 # should match the version of pip
-pip>=25.0.0,<26.0.0
+packaging # must be identical to the version of pip
+pip
 requests>=2.0.0,<3.0.0
 soundcloud-v2>=1.0.0,<2.0.0
 std-nslog>=1.0.0,<2.0.0
