@@ -4,6 +4,8 @@ python_modules
 ffmpeg/build
 ffmpeg/installed
 
+Arbor/Config/Local.xcconfig
+
 # https://github.com/github/gitignore/blob/main/Swift.gitignore
 # Xcode
 #

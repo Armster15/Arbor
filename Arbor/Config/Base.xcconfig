@@ -1,0 +1,7 @@
+// Safe defaults (committed)
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM =
+PRODUCT_BUNDLE_IDENTIFIER = org.example.$(PRODUCT_NAME:rfc1034identifier)
+
+// Optional include for per-user overrides (not committed)
+#include? "Local.xcconfig"
