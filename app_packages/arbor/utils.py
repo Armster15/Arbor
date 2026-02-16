@@ -21,7 +21,7 @@ def random_user_agent():
 
 def create_ytmusic_client():
     """
-    Create a YTMusic client with a random user agent since by
+    Creates a YTMusic client with a random user agent since by
     default it hardcodes a really old user agent from 2021.
     """
     session = requests.Session()
