@@ -21,11 +21,9 @@ def random_user_agent():
 
 def create_ytmusic_client():
     """
-    Create a YTMusic client with a random user agent since by default it hardcodes
-    a really old user agent from 2021.
+    Create a YTMusic client with a random user agent since by
+    default it hardcodes a really old user agent from 2021.
     """
     session = requests.Session()
     session.headers.update({"user-agent": random_user_agent()})
-    return YTMusic(
-        requests_session=session
-    )  # pyright: ignore [reportUnknownReturnType]
+    return YTMusic(requests_session=session)
