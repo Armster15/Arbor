@@ -6,9 +6,7 @@ from bs4 import BeautifulSoup
 import json
 from difflib import SequenceMatcher
 import re
-
-
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; rv:123.0) Gecko/20100101 Firefox/123.0"
+from .utils import USER_AGENT
 
 
 def _genius_api_request(url: str) -> requests.Response | None:
