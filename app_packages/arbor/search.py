@@ -1,4 +1,4 @@
-from ytmusicapi import YTMusic
+from .utils import create_ytmusic_client, random_user_agent
 import json
 import re
 from typing import Optional, Tuple
@@ -6,7 +6,7 @@ from soundcloud import SoundCloud
 
 
 def search_youtube(query: str):
-    ytmusic = YTMusic()
+    ytmusic = create_ytmusic_client()
 
     print(f"Searching YouTube for {query}")
     raw_results = ytmusic.search(query, filter="songs", limit=15)
@@ -65,7 +65,7 @@ def search_youtube(query: str):
 
 
 def search_soundcloud(query: str):
-    soundcloud = SoundCloud()
+    soundcloud = SoundCloud(user_agent=random_user_agent())
 
     print(f"Searching SoundCloud for {query}")
     raw_results = soundcloud.search_tracks(query, limit=15)

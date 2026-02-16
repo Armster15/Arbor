@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 import yt_dlp
 
 from .search import search_youtube
-from .utils import USER_AGENT
+from .utils import random_user_agent
 
 
 @dataclass(frozen=True)
@@ -191,7 +191,11 @@ def _download_spotify(
         )
 
     embed_url = f"https://open.spotify.com/embed/track/{track_id}?utm_source=oembed"
-    response = requests.get(embed_url, timeout=20, headers={"User-Agent": USER_AGENT})
+    response = requests.get(
+        embed_url,
+        timeout=20,
+        headers={"User-Agent": random_user_agent()},
+    )
     if response.status_code != 200:
         raise ValueError(
             f"Failed to fetch Spotify embed page (status={response.status_code})"
