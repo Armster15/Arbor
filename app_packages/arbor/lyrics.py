@@ -1,5 +1,5 @@
 import json
-from ytmusicapi import YTMusic
+from .utils import create_ytmusic_client
 
 
 def get_lyrics_from_youtube(video_id: str) -> str:
@@ -12,7 +12,7 @@ def get_lyrics_from_youtube(video_id: str) -> str:
     Returns:
         JSON string for the payload or empty string if unavailable.
     """
-    ytmusic = YTMusic()
+    ytmusic = create_ytmusic_client()
 
     watch = ytmusic.get_watch_playlist(videoId=video_id, limit=1)
     browse_id = watch.get("lyrics")

@@ -6,12 +6,14 @@ from bs4 import BeautifulSoup
 import json
 from difflib import SequenceMatcher
 import re
-from .utils import USER_AGENT
+from .utils import random_user_agent
 
 
 def _genius_api_request(url: str) -> requests.Response | None:
     try:
-        resp = requests.get(url, timeout=30, headers={"User-Agent": USER_AGENT})
+        resp = requests.get(
+            url, timeout=30, headers={"User-Agent": random_user_agent()}
+        )
         resp.raise_for_status()
     except requests.RequestException:
         print("cannot reach Genius servers")
