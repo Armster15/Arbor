@@ -7,6 +7,14 @@
 
 import SwiftData
 
+// This model is a SwiftData synced with iCloud
+//
+// To make schema changes:
+// 1. Add the new property to the model
+// 2. Run development in the simulator. Make sure you are logged in with your Apple account in the simulator (very important!)
+// 3. While running in the simulator, create/update data that touches that model
+// 4. Go to icloud.developer.apple.com and view the Development schema -- it should have the updated schema
+// 5. In the sidebar, click "Deploy Schema Changes" to have the production environment use the updated schema 
 @Model
 class LibraryItem {
     var id: UUID = UUID()
