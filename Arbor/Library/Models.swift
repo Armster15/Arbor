@@ -25,6 +25,7 @@ class LibraryItem {
     var speedRate: Float = 1.0
     var pitchCents: Float = 0.0
     var reverbMix: Float = 0.0
+    var isScrobblingOptedOut: Bool = false
     
     init(
         original_url: String,
@@ -37,7 +38,8 @@ class LibraryItem {
         thumbnail_is_square: Bool?,
         speedRate: Float = 1.0,
         pitchCents: Float = 0.0,
-        reverbMix: Float = 0.0
+        reverbMix: Float = 0.0,
+        isScrobblingOptedOut: Bool = false
     ) {
 
         self.original_url = original_url
@@ -51,6 +53,7 @@ class LibraryItem {
         self.speedRate = speedRate
         self.pitchCents = pitchCents
         self.reverbMix = reverbMix
+        self.isScrobblingOptedOut = isScrobblingOptedOut
     }
     
     convenience init(
@@ -70,7 +73,8 @@ class LibraryItem {
             thumbnail_is_square: meta.thumbnail_is_square,
             speedRate: speedRate,
             pitchCents: pitchCents,
-            reverbMix: reverbMix
+            reverbMix: reverbMix,
+            isScrobblingOptedOut: false
         )
     }
     
@@ -86,7 +90,8 @@ class LibraryItem {
             thumbnail_is_square: item.thumbnail_is_square,
             speedRate: item.speedRate,
             pitchCents: item.pitchCents,
-            reverbMix: item.reverbMix
+            reverbMix: item.reverbMix,
+            isScrobblingOptedOut: item.isScrobblingOptedOut
         )
     }
 }
