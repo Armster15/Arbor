@@ -433,7 +433,7 @@ private struct PlayerAdjustmentsSection: View {
                                 audioPlayer.setPitchByCents(Float(snapped))
                             }
                         ),
-                        in: -800.0...800.0,
+                        in: -1200.0...1200.0,
                         step: 50
                     )
                     .accentColor(Color("PrimaryBg"))
@@ -448,7 +448,7 @@ private struct PlayerAdjustmentsSection: View {
                                 audioPlayer.setPitchByCents(Float(newVal))
                             }
                         ),
-                        in: -800.0...800.0,
+                        in: -1200.0...1200.0,
                         step: 10,
                     ) {}
                     .fixedSize()
