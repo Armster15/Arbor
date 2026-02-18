@@ -584,7 +584,8 @@ private struct PlayerToolbar: ToolbarContent {
                     }
                 }
             } label: {
-                Image(systemName: "ellipsis")
+                Label("More Options", systemImage: "ellipsis")
+                    .labelStyle(.iconOnly)
             }
             .accessibilityLabel("More Options")
         }
