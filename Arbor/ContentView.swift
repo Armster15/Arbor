@@ -93,7 +93,7 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     
                     if let audioPlayer = player.audioPlayer {
-                        PlayPauseButton(audioPlayer: audioPlayer)
+                        PlayPauseButton(audioPlayer: audioPlayer, playback: audioPlayer.playback)
                     }
                 }
                 .padding(.vertical, 4)
@@ -143,24 +143,24 @@ struct ContentView: View {
 }
 
 private struct PlayPauseButton: View {
-    // required so we can observe changes to the audio player's isPlaying property
-    @ObservedObject var audioPlayer: AudioPlayerWithReverb
+    let audioPlayer: AudioPlayerWithReverb
+    @ObservedObject var playback: AudioPlaybackState
     
     var body: some View {
         Button(action: {
-            if audioPlayer.isPlaying {
+            if playback.isPlaying {
                 audioPlayer.pause()
             } else {
                 audioPlayer.play()
             }
         }) {
-            Image(systemName: audioPlayer.isPlaying ? "pause.fill" : "play.fill")
+            Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
                 .font(.title3)
                 .foregroundStyle(Color("PrimaryText"))
                 .frame(width: 36, height: 36)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(audioPlayer.isPlaying ? "Pause" : "Play")
+        .accessibilityLabel(playback.isPlaying ? "Pause" : "Play")
     }
 }
 

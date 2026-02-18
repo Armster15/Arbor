@@ -16,7 +16,9 @@ public enum LyricsDisplayMode: String, CaseIterable {
 
 public struct LyricsView: View {
     let payload: LyricsPayload
-    @ObservedObject var audioPlayer: AudioPlayerWithReverb
+    let audioPlayer: AudioPlayerWithReverb
+    @ObservedObject var playback: AudioPlaybackState
+    @ObservedObject var timeline: AudioTimelineState
     let originalUrl: String
     @Binding var lyricsDisplayMode: LyricsDisplayMode
     let onExpand: () -> Void
@@ -81,6 +83,8 @@ public struct LyricsView: View {
             LyricsLinesView(
                 payload: payload,
                 audioPlayer: audioPlayer,
+                playback: playback,
+                timeline: timeline,
                 lyricsDisplayMode: lyricsDisplayMode,
                 romanizedLyricLines: romanizedLyricLines,
                 translatedLyricLines: translatedLyricLines,
@@ -180,7 +184,9 @@ private func lyricUIFont(textStyle: UIFont.TextStyle, weight: UIFont.Weight) -> 
 
 private struct LyricsLinesView: View {
     let payload: LyricsPayload
-    @ObservedObject var audioPlayer: AudioPlayerWithReverb
+    let audioPlayer: AudioPlayerWithReverb
+    @ObservedObject var playback: AudioPlaybackState
+    @ObservedObject var timeline: AudioTimelineState
     let lyricsDisplayMode: LyricsDisplayMode
     let romanizedLyricLines: [String]?
     let translatedLyricLines: [String]?
@@ -294,9 +300,9 @@ private struct LyricsLinesView: View {
     }
 
     var body: some View {
-        let currentMs = Int(audioPlayer.currentTime * 1000)
+        let currentMs = Int(timeline.currentTime * 1000)
         let shouldShowActive = payload.timed
-            && (currentMs > 0 || audioPlayer.isPlaying || lastPlaybackTimeMs != nil)
+            && (currentMs > 0 || playback.isPlaying || lastPlaybackTimeMs != nil)
         let activeIndex = shouldShowActive
             ? LyricsCache.activeLyricIndex(for: payload, currentTimeMs: currentMs)
             : nil
@@ -329,7 +335,7 @@ private struct LyricsLinesView: View {
                 guard let newValue, newValue != lastActiveLyricIndex else { return }
                 scrollToActiveLyric(proxy, activeIndex: newValue, shouldAnimate: true)
             }
-            .onChange(of: audioPlayer.currentTime) { _, newValue in
+            .onChange(of: timeline.currentTime) { _, newValue in
                 guard payload.timed, isAutoScrollEnabled else { return }
                 guard !shouldSuppressAutoScroll(for: activeIndex) else { return }
                 let newMs = Int(newValue * 1000)
@@ -468,6 +474,8 @@ private struct LyricsHeaderView: View, Equatable {
 public struct FullScreenLyricsView: View {
     let payload: LyricsPayload
     let audioPlayer: AudioPlayerWithReverb
+    @ObservedObject var playback: AudioPlaybackState
+    @ObservedObject var timeline: AudioTimelineState
     let title: String
     let artistSummary: String
     let originalUrl: String
@@ -553,6 +561,8 @@ public struct FullScreenLyricsView: View {
                 LyricsLinesView(
                     payload: payload,
                     audioPlayer: audioPlayer,
+                    playback: playback,
+                    timeline: timeline,
                     lyricsDisplayMode: lyricsDisplayMode,
                     romanizedLyricLines: romanizedLyricLines,
                     translatedLyricLines: translatedLyricLines,
@@ -580,7 +590,11 @@ public struct FullScreenLyricsView: View {
                     )
                     .equatable()
 
-                    FullScreenLyricsPlaybackControls(audioPlayer: audioPlayer)
+                    FullScreenLyricsPlaybackControls(
+                        audioPlayer: audioPlayer,
+                        playback: playback,
+                        timeline: timeline
+                    )
                 }
             }
             .padding(.horizontal, 22)
@@ -597,7 +611,9 @@ public struct FullScreenLyricsView: View {
 }
 
 private struct FullScreenLyricsPlaybackControls: View {
-    @ObservedObject var audioPlayer: AudioPlayerWithReverb
+    let audioPlayer: AudioPlayerWithReverb
+    @ObservedObject var playback: AudioPlaybackState
+    @ObservedObject var timeline: AudioTimelineState
 
     @State private var isScrubbing: Bool = false
     @State private var scrubberTime: Double = 0
@@ -606,7 +622,7 @@ private struct FullScreenLyricsPlaybackControls: View {
         VStack(spacing: 18) {
             Scrubber(
                 value: $scrubberTime,
-                inRange: 0...max(audioPlayer.duration, 0.01),
+                inRange: 0...max(playback.duration, 0.01),
                 activeFillColor: Color("PrimaryBg"),
                 fillColor: Color("PrimaryBg").opacity(0.8),
                 emptyColor: Color("PrimaryBg").opacity(0.2),
@@ -614,33 +630,33 @@ private struct FullScreenLyricsPlaybackControls: View {
                 onEditingChanged: { editing in
                     isScrubbing = editing
                     if editing {
-                        scrubberTime = audioPlayer.currentTime
+                        scrubberTime = timeline.currentTime
                     }
                     if !editing {
                         audioPlayer.seek(to: scrubberTime)
                     }
                 }
             )
-            .onChange(of: audioPlayer.currentTime) { _, newValue in
+            .onChange(of: timeline.currentTime) { _, newValue in
                 guard !isScrubbing else { return }
                 scrubberTime = newValue
             }
             .onAppear {
-                scrubberTime = audioPlayer.currentTime
+                scrubberTime = timeline.currentTime
             }
 
             Button(action: {
-                if audioPlayer.isPlaying {
+                if playback.isPlaying {
                     audioPlayer.pause()
                 } else {
                     audioPlayer.play()
                 }
             }) {
-                Image(systemName: audioPlayer.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                Image(systemName: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                     .font(.system(size: 56))
                     .foregroundColor(Color("PrimaryBg"))
             }
-            .accessibilityLabel(audioPlayer.isPlaying ? "Pause" : "Play")
+            .accessibilityLabel(playback.isPlaying ? "Pause" : "Play")
         }
     }
 }
