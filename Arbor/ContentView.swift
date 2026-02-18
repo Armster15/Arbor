@@ -74,11 +74,12 @@ struct ContentView: View {
                                 Text(libraryItem.title)
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
+                                    .foregroundColor(Color("PrimaryText"))
                                     .lineLimit(1)
                                 
                                 Text(formatArtists(libraryItem.artists))
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Color("PrimaryText").opacity(0.7))
                                     .lineLimit(1)
                             }
                             
