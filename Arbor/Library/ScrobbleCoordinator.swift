@@ -40,9 +40,13 @@ actor ScrobbleCoordinator {
         isPlaying: Bool,
         isAuthenticated: Bool,
         isScrobblingEnabled: Bool,
+        isTrackScrobblingEnabled: Bool,
         manager: SBKManager?
     ) async {
         handleScrobbleResetIfNeeded(currentTime: currentTime, isPlaying: isPlaying)
+
+        // Do not advance scrobble progress for tracks explicitly opted out.
+        guard isTrackScrobblingEnabled else { return }
 
         guard let scrobbleState,
               scrobbleState.shouldScrobble(currentTime: currentTime, isPlaying: isPlaying) else {

@@ -18,6 +18,7 @@ final class PlayerCoordinator: ObservableObject {
     @Published var artworkImage: UIImage? = nil
     @Published var artworkURL: URL? = nil
     @Published var lyricsDisplayMode: LyricsDisplayMode = .original
+    @Published private(set) var isLastFMEnabled: Bool = false
 
     private var lastFM: LastFMSession?
     private let scrobbleCoordinator = ScrobbleCoordinator()
@@ -27,9 +28,17 @@ final class PlayerCoordinator: ObservableObject {
     // for setting the global LastFM session
     func attach(lastFM: LastFMSession) {
         self.lastFM = lastFM
-        lastFMCancellable = Publishers.CombineLatest(lastFM.$manager, lastFM.$isScrobblingEnabled)
-            .sink { [weak self] manager, isEnabled in
-                guard let self = self, isEnabled else { return }
+        lastFMCancellable = Publishers.CombineLatest3(
+            lastFM.$manager,
+            lastFM.$isScrobblingEnabled,
+            lastFM.$isAuthenticated
+        )
+            .sink { [weak self] manager, isEnabled, isAuthenticated in
+                guard let self = self else { return }
+                let isLastFMEnabled = isAuthenticated && isEnabled && manager != nil
+                self.isLastFMEnabled = isLastFMEnabled
+
+                guard isLastFMEnabled else { return }
                 Task {
                     await self.scrobbleCoordinator.flushIfNeeded(manager: manager)
                 }
@@ -138,6 +147,7 @@ final class PlayerCoordinator: ObservableObject {
     private func handleScrobbleProgress(currentTime: Double, isPlaying: Bool) {
         let isAuthenticated = lastFM?.isAuthenticated ?? false
         let isScrobblingEnabled = lastFM?.isScrobblingEnabled ?? false
+        let isTrackScrobblingEnabled = !(libraryItem?.isScrobblingOptedOut ?? false)
         let manager = lastFM?.manager
 
         Task {
@@ -146,6 +156,7 @@ final class PlayerCoordinator: ObservableObject {
                 isPlaying: isPlaying,
                 isAuthenticated: isAuthenticated,
                 isScrobblingEnabled: isScrobblingEnabled,
+                isTrackScrobblingEnabled: isTrackScrobblingEnabled,
                 manager: manager
             )
         }

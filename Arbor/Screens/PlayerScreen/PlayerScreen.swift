@@ -26,7 +26,8 @@ struct PlayerScreen: View {
                         get: { filePath },
                         set: { player.filePath = $0 }
                     ),
-                    lyricsDisplayMode: $player.lyricsDisplayMode
+                    lyricsDisplayMode: $player.lyricsDisplayMode,
+                    isLastFMEnabled: player.isLastFMEnabled
                 )
             } else {
                 EmptyView()
@@ -54,6 +55,7 @@ struct __PlayerScreen: View {
     let audioPlayer: AudioPlayerWithReverb
     @Binding var filePath: String
     @Binding var lyricsDisplayMode: LyricsDisplayMode
+    let isLastFMEnabled: Bool
     
     @State private var isEditSheetPresented: Bool = false
     @State private var lyricsState: LyricsState = .idle
@@ -84,12 +86,14 @@ struct __PlayerScreen: View {
         libraryItem: LibraryItem,
         audioPlayer: AudioPlayerWithReverb,
         filePath: Binding<String>,
-        lyricsDisplayMode: Binding<LyricsDisplayMode>
+        lyricsDisplayMode: Binding<LyricsDisplayMode>,
+        isLastFMEnabled: Bool
     ) {
         self.libraryItem = libraryItem
         self.audioPlayer = audioPlayer
         self._filePath = filePath
         self._lyricsDisplayMode = lyricsDisplayMode
+        self.isLastFMEnabled = isLastFMEnabled
     }
 
     private func fetchLyricsIfNeeded() {
@@ -202,7 +206,11 @@ struct __PlayerScreen: View {
                 savedPitchCents: savedPitchCents,
                 savedReverbMix: savedReverbMix,
                 onSave: { saveToLibrary() },
-                onEdit: { isEditSheetPresented = true }
+                onEdit: { isEditSheetPresented = true },
+                shareURL: URL(string: libraryItem.original_url),
+                showsScrobbleToggle: isLastFMEnabled,
+                isScrobblingOptedOut: libraryItem.isScrobblingOptedOut,
+                onToggleScrobbleOptOut: { libraryItem.isScrobblingOptedOut.toggle() }
             )
         }
         .task(id: libraryItem.original_url) {
@@ -516,6 +524,10 @@ private struct PlayerToolbar: ToolbarContent {
     let savedReverbMix: Float?
     let onSave: () -> Void
     let onEdit: () -> Void
+    let shareURL: URL?
+    let showsScrobbleToggle: Bool
+    let isScrobblingOptedOut: Bool
+    let onToggleScrobbleOptOut: () -> Void
 
     private var isModified: Bool {
         let refSpeed = savedSpeedRate ?? libraryItemSpeedRate
@@ -542,11 +554,39 @@ private struct PlayerToolbar: ToolbarContent {
         }
 
         ToolbarItem(placement: .navigationBarTrailing) {
-            Button {
-                onEdit()
+            Menu {
+                Button {
+                    onEdit()
+                } label: {
+                    Label("Edit Metadata", systemImage: "pencil")
+                }
+
+                if let shareURL {
+                    ShareLink(item: shareURL) {
+                        Label("Share Song", systemImage: "square.and.arrow.up")
+                    }
+                } else {
+                    Button {} label: {
+                        Label("Share Song", systemImage: "square.and.arrow.up")
+                    }
+                    .disabled(true)
+                }
+
+                if showsScrobbleToggle {
+                    Divider()
+                    Button {
+                        onToggleScrobbleOptOut()
+                    } label: {
+                        Label(
+                            isScrobblingOptedOut ? "Opt In to Scrobbling" : "Opt Out of Scrobbling",
+                            systemImage: isScrobblingOptedOut ? "music.note" : "music.note.slash"
+                        )
+                    }
+                }
             } label: {
-                Label("Edit Metadata", systemImage: "pencil")
+                Image(systemName: "ellipsis")
             }
+            .accessibilityLabel("More Options")
         }
     }
 }
@@ -588,7 +628,8 @@ private struct PlayerMetadataSyncView: View {
                     get: { "" },
                     set: { _ in }
                 ),
-                lyricsDisplayMode: .constant(.original)
+                lyricsDisplayMode: .constant(.original),
+                isLastFMEnabled: true
 			)
 		}
 	}
