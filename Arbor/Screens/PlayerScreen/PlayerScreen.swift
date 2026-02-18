@@ -36,14 +36,14 @@ struct PlayerScreen: View {
     }
 }
 
-func decoratedTitle(for libraryItem: LibraryItem, audioPlayer: AudioPlayerWithReverb) -> String {
+func decoratedTitle(for libraryItem: LibraryItem, speedRate: Float, reverbMix: Float) -> String {
     var tags: [String] = []
-    if audioPlayer.speedRate > 1.0 {
+    if speedRate > 1.0 {
         tags.append("sped up")
-    } else if audioPlayer.speedRate < 1.0 {
+    } else if speedRate < 1.0 {
         tags.append("slowed")
     }
-    if audioPlayer.reverbMix > 0.0 {
+    if reverbMix > 0.0 {
         tags.append("reverb")
     }
     guard !tags.isEmpty else { return libraryItem.title }
@@ -81,7 +81,7 @@ struct __PlayerScreen: View {
     private var isDownloaded: Bool {
         getLocalAudioFilePath(originalUrl: libraryItem.original_url) != nil
     }
-    
+
     init(
         libraryItem: LibraryItem,
         audioPlayer: AudioPlayerWithReverb,
@@ -125,6 +125,8 @@ struct __PlayerScreen: View {
                 LyricsView(
                     payload: payload,
                     audioPlayer: audioPlayer,
+                    playback: audioPlayer.playback,
+                    timeline: audioPlayer.timeline,
                     originalUrl: libraryItem.original_url,
                     lyricsDisplayMode: $lyricsDisplayMode,
                     onExpand: {
@@ -186,19 +188,27 @@ struct __PlayerScreen: View {
                         thumbnailHasContextMenu: true
                     )
                     
-                    PlayerControlsSection(audioPlayer: audioPlayer)
+                    PlayerControlsSection(
+                        audioPlayer: audioPlayer,
+                        playback: audioPlayer.playback,
+                        timeline: audioPlayer.timeline
+                    )
                 }
                 
-                PlayerAdjustmentsSection(audioPlayer: audioPlayer)
+                PlayerAdjustmentsSection(audioPlayer: audioPlayer, effects: audioPlayer.effects)
                 lyricsSection
-                PlayerMetadataSyncView(libraryItem: libraryItem, audioPlayer: audioPlayer)
+                PlayerMetadataSyncView(
+                    libraryItem: libraryItem,
+                    audioPlayer: audioPlayer,
+                    effects: audioPlayer.effects
+                )
             }
             .padding()
         }
         .toolbar {
             PlayerToolbar(
-                audioPlayer: audioPlayer,
                 isDownloaded: isDownloaded,
+                effects: audioPlayer.effects,
                 libraryItemSpeedRate: libraryItem.speedRate,
                 libraryItemPitchCents: libraryItem.pitchCents,
                 libraryItemReverbMix: libraryItem.reverbMix,
@@ -232,6 +242,8 @@ struct __PlayerScreen: View {
                 FullScreenLyricsView(
                     payload: activeLyricsPayload,
                     audioPlayer: audioPlayer,
+                    playback: audioPlayer.playback,
+                    timeline: audioPlayer.timeline,
                     title: libraryItem.title,
                     artistSummary: libraryItem.artists.joined(separator: ", "),
                     originalUrl: libraryItem.original_url,
@@ -243,7 +255,9 @@ struct __PlayerScreen: View {
 }
 
 private struct PlayerControlsSection: View {
-    @ObservedObject var audioPlayer: AudioPlayerWithReverb
+    let audioPlayer: AudioPlayerWithReverb
+    @ObservedObject var playback: AudioPlaybackState
+    @ObservedObject var timeline: AudioTimelineState
 
     @State private var isScrubbing: Bool = false
     @State private var scrubberTime: Double = 0
@@ -265,14 +279,14 @@ private struct PlayerControlsSection: View {
                     }
 
                     Button(action: {
-                        if audioPlayer.isPlaying {
+                        if playback.isPlaying {
                             audioPlayer.pause()
                         } else {
                             audioPlayer.play()
                         }
                     }) {
                         Image(
-                            systemName: audioPlayer.isPlaying ? "pause.circle.fill" : "play.circle.fill"
+                            systemName: playback.isPlaying ? "pause.circle.fill" : "play.circle.fill"
                         )
                         .font(.system(size: 56))
                         .foregroundColor(Color("PrimaryBg"))
@@ -298,7 +312,7 @@ private struct PlayerControlsSection: View {
                         audioPlayer.toggleLoop()
                     }) {
                         Image(
-                            systemName: audioPlayer.isLooping ? "repeat.1.circle.fill" : "repeat.circle.fill"
+                            systemName: playback.isLooping ? "repeat.1.circle.fill" : "repeat.circle.fill"
                         )
                         .font(.system(size: 40))
                         .foregroundStyle(
@@ -306,7 +320,7 @@ private struct PlayerControlsSection: View {
                             .clear
                         )
                         .accessibilityLabel(
-                            audioPlayer.isLooping ? "Disable Loop" : "Enable Loop"
+                            playback.isLooping ? "Disable Loop" : "Enable Loop"
                         )
                     }
                 }
@@ -314,7 +328,7 @@ private struct PlayerControlsSection: View {
 
             Scrubber(
                 value: $scrubberTime,
-                inRange: 0...max(audioPlayer.duration, 0.01),
+                inRange: 0...max(playback.duration, 0.01),
                 activeFillColor: Color("PrimaryBg"),
                 fillColor: Color("PrimaryBg").opacity(0.8),
                 emptyColor: Color("PrimaryBg").opacity(0.2),
@@ -322,26 +336,27 @@ private struct PlayerControlsSection: View {
                 onEditingChanged: { editing in
                     isScrubbing = editing
                     if editing {
-                        scrubberTime = audioPlayer.currentTime
+                        scrubberTime = timeline.currentTime
                     }
                     if !editing {
                         audioPlayer.seek(to: scrubberTime)
                     }
                 }
             )
-            .onChange(of: audioPlayer.currentTime) { _, newValue in
+            .onChange(of: timeline.currentTime) { _, newValue in
                 guard !isScrubbing else { return }
                 scrubberTime = newValue
             }
             .onAppear {
-                scrubberTime = audioPlayer.currentTime
+                scrubberTime = timeline.currentTime
             }
         }
     }
 }
 
 private struct PlayerAdjustmentsSection: View {
-    @ObservedObject var audioPlayer: AudioPlayerWithReverb
+    let audioPlayer: AudioPlayerWithReverb
+    @ObservedObject var effects: AudioEffectsState
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -358,11 +373,11 @@ private struct PlayerAdjustmentsSection: View {
                     .font(.caption)
                     .buttonStyle(.bordered)
                     .tint(Color("PrimaryBg"))
-                    .opacity(audioPlayer.speedRate == 1.0 ? 0 : 1)
+                    .opacity(effects.speedRate == 1.0 ? 0 : 1)
 
                     Spacer()
 
-                    Text(String(format: "%.2fx", audioPlayer.speedRate))
+                    Text(String(format: "%.2fx", effects.speedRate))
                         .font(.subheadline)
                         .foregroundColor(Color("PrimaryBg"))
                 }
@@ -371,7 +386,7 @@ private struct PlayerAdjustmentsSection: View {
                     Slider(
                         value: Binding(
                             get: {
-                                Double(audioPlayer.speedRate)
+                                Double(effects.speedRate)
                             },
                             set: { newVal in
                                 let snapped = (newVal / 0.05).rounded() * 0.05
@@ -387,7 +402,7 @@ private struct PlayerAdjustmentsSection: View {
                     Stepper(
                         value: Binding(
                             get: {
-                                Double(audioPlayer.speedRate)
+                                Double(effects.speedRate)
                             },
                             set: { newVal in
                                 audioPlayer.setSpeedRate(Float(newVal))
@@ -413,11 +428,11 @@ private struct PlayerAdjustmentsSection: View {
                     .font(.caption)
                     .buttonStyle(.bordered)
                     .tint(Color("PrimaryBg"))
-                    .opacity(audioPlayer.pitchCents.isZero ? 0 : 1)
+                    .opacity(effects.pitchCents.isZero ? 0 : 1)
 
                     Spacer()
 
-                    Text("\(Int(audioPlayer.pitchCents)) cents")
+                    Text("\(Int(effects.pitchCents)) cents")
                         .font(.subheadline)
                         .foregroundColor(Color("PrimaryBg"))
                 }
@@ -426,7 +441,7 @@ private struct PlayerAdjustmentsSection: View {
                     Slider(
                         value: Binding(
                             get: {
-                                Double(audioPlayer.pitchCents)
+                                Double(effects.pitchCents)
                             },
                             set: { newVal in
                                 let snapped = (newVal / 50.0).rounded() * 50.0
@@ -442,7 +457,7 @@ private struct PlayerAdjustmentsSection: View {
                     Stepper(
                         value: Binding(
                             get: {
-                                Double(audioPlayer.pitchCents)
+                                Double(effects.pitchCents)
                             },
                             set: { newVal in
                                 audioPlayer.setPitchByCents(Float(newVal))
@@ -468,11 +483,11 @@ private struct PlayerAdjustmentsSection: View {
                     .font(.caption)
                     .buttonStyle(.bordered)
                     .tint(Color("PrimaryBg"))
-                    .opacity(audioPlayer.reverbMix > 0 ? 1 : 0)
+                    .opacity(effects.reverbMix > 0 ? 1 : 0)
 
                     Spacer()
 
-                    Text("\(Int(audioPlayer.reverbMix))%")
+                    Text("\(Int(effects.reverbMix))%")
                         .font(.subheadline)
                         .foregroundColor(Color("PrimaryBg"))
                 }
@@ -481,7 +496,7 @@ private struct PlayerAdjustmentsSection: View {
                     Slider(
                         value: Binding(
                             get: {
-                                Double(audioPlayer.reverbMix)
+                                Double(effects.reverbMix)
                             },
                             set: { newVal in
                                 let snapped = (newVal / 5.0).rounded() * 5.0
@@ -497,7 +512,7 @@ private struct PlayerAdjustmentsSection: View {
                     Stepper(
                         value: Binding(
                             get: {
-                                Double(audioPlayer.reverbMix)
+                                Double(effects.reverbMix)
                             },
                             set: { newVal in
                                 audioPlayer.setReverbMix(Float(newVal))
@@ -514,8 +529,8 @@ private struct PlayerAdjustmentsSection: View {
 }
 
 private struct PlayerToolbar: ToolbarContent {
-    @ObservedObject var audioPlayer: AudioPlayerWithReverb
     let isDownloaded: Bool
+    let effects: AudioEffectsState
     let libraryItemSpeedRate: Float
     let libraryItemPitchCents: Float
     let libraryItemReverbMix: Float
@@ -529,28 +544,19 @@ private struct PlayerToolbar: ToolbarContent {
     let isScrobblingOptedOut: Bool
     let onToggleScrobbleOptOut: () -> Void
 
-    private var isModified: Bool {
-        let refSpeed = savedSpeedRate ?? libraryItemSpeedRate
-        let refPitch = savedPitchCents ?? libraryItemPitchCents
-        let refReverb = savedReverbMix ?? libraryItemReverbMix
-
-        return audioPlayer.speedRate != refSpeed ||
-            audioPlayer.pitchCents != refPitch ||
-            audioPlayer.reverbMix != refReverb
-    }
-
     var body: some ToolbarContent {
         ToolbarItem(placement: .navigationBarTrailing) {
-            Button {
-                onSave()
-            } label: {
-                Label(
-                    "Download",
-                    systemImage: !isDownloaded ? "arrow.down.circle" :
-                        isModified ? "arrow.down.circle.dotted" :
-                        "checkmark.circle"
-                )
-            }
+            DownloadToolbarButton(
+                isDownloaded: isDownloaded,
+                effects: effects,
+                libraryItemSpeedRate: libraryItemSpeedRate,
+                libraryItemPitchCents: libraryItemPitchCents,
+                libraryItemReverbMix: libraryItemReverbMix,
+                savedSpeedRate: savedSpeedRate,
+                savedPitchCents: savedPitchCents,
+                savedReverbMix: savedReverbMix,
+                onSave: onSave
+            )
         }
 
         ToolbarItem(placement: .navigationBarTrailing) {
@@ -592,17 +598,66 @@ private struct PlayerToolbar: ToolbarContent {
     }
 }
 
+private struct DownloadToolbarButton: View {
+    let isDownloaded: Bool
+    @ObservedObject var effects: AudioEffectsState
+    let libraryItemSpeedRate: Float
+    let libraryItemPitchCents: Float
+    let libraryItemReverbMix: Float
+    let savedSpeedRate: Float?
+    let savedPitchCents: Float?
+    let savedReverbMix: Float?
+    let onSave: () -> Void
+
+    private var isModified: Bool {
+        let refSpeed = savedSpeedRate ?? libraryItemSpeedRate
+        let refPitch = savedPitchCents ?? libraryItemPitchCents
+        let refReverb = savedReverbMix ?? libraryItemReverbMix
+        let snapshot = effects.snapshot
+
+        return snapshot.speedRate != refSpeed ||
+            snapshot.pitchCents != refPitch ||
+            snapshot.reverbMix != refReverb
+    }
+
+    var body: some View {
+        Button {
+            onSave()
+        } label: {
+            Label(
+                "Download",
+                systemImage: !isDownloaded ? "arrow.down.circle" :
+                    isModified ? "arrow.down.circle.dotted" :
+                    "checkmark.circle"
+            )
+        }
+    }
+}
+
 private struct PlayerMetadataSyncView: View {
     let libraryItem: LibraryItem
-    @ObservedObject var audioPlayer: AudioPlayerWithReverb
+    let audioPlayer: AudioPlayerWithReverb
+    @ObservedObject var effects: AudioEffectsState
 
     var body: some View {
         EmptyView()
-            .onChange(of: audioPlayer.speedRate) { _, _ in
-                audioPlayer.updateMetadataTitle(decoratedTitle(for: libraryItem, audioPlayer: audioPlayer))
+            .onChange(of: effects.speedRate) { _, _ in
+                audioPlayer.updateMetadataTitle(
+                    decoratedTitle(
+                        for: libraryItem,
+                        speedRate: effects.speedRate,
+                        reverbMix: effects.reverbMix
+                    )
+                )
             }
-            .onChange(of: audioPlayer.reverbMix) { _, _ in
-                audioPlayer.updateMetadataTitle(decoratedTitle(for: libraryItem, audioPlayer: audioPlayer))
+            .onChange(of: effects.reverbMix) { _, _ in
+                audioPlayer.updateMetadataTitle(
+                    decoratedTitle(
+                        for: libraryItem,
+                        speedRate: effects.speedRate,
+                        reverbMix: effects.reverbMix
+                    )
+                )
             }
     }
 }

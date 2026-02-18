@@ -127,7 +127,7 @@ final class PlayerCoordinator: ObservableObject {
         debugPrint("Monitoring audio player changes for library item: \(libraryItem.title)")
 
         // monitor changes to `duration`
-        audioPlayer.$duration
+        audioPlayer.playback.$duration
             .sink { [weak self] duration in
                 guard let self = self else { return }
                 Task {
@@ -137,7 +137,7 @@ final class PlayerCoordinator: ObservableObject {
             .store(in: &audioPlayerCancellables)
 
         // monitor changes to `currentTime` and `isPlaying`
-        Publishers.CombineLatest(audioPlayer.$currentTime, audioPlayer.$isPlaying)
+        Publishers.CombineLatest(audioPlayer.timeline.$currentTime, audioPlayer.playback.$isPlaying)
             .sink { [weak self] currentTime, isPlaying in
                 self?.handleScrobbleProgress(currentTime: currentTime, isPlaying: isPlaying)
             }

@@ -12,7 +12,7 @@ import SwiftUI
 // https://stackoverflow.com/questions/60159490/swiftui-passing-an-environmentobject-to-a-sheet-causes-update-problems
 struct EditMetadataSheet: View {
     @Bindable var libraryItem: LibraryItem
-    @ObservedObject var audioPlayer: AudioPlayerWithReverb
+    let audioPlayer: AudioPlayerWithReverb
     let onLyricsInvalidated: () -> Void
     @Binding var isPresented: Bool
     
@@ -36,7 +36,7 @@ struct EditMetadataSheet: View {
 
 struct __EditMetadataSheet: View {
     @Bindable var libraryItem: LibraryItem
-    @ObservedObject var audioPlayer: AudioPlayerWithReverb
+    let audioPlayer: AudioPlayerWithReverb
     let player: PlayerCoordinator
     let lastFM: LastFMSession
     let onLyricsInvalidated: () -> Void
@@ -233,7 +233,13 @@ struct __EditMetadataSheet: View {
                 libraryItem.scrobbleTitle = nextScrobbleTitle
                 libraryItem.artists = trimmedArtists
                 
-                audioPlayer.updateMetadataTitle(decoratedTitle(for: libraryItem, audioPlayer: audioPlayer))
+                audioPlayer.updateMetadataTitle(
+                    decoratedTitle(
+                        for: libraryItem,
+                        speedRate: audioPlayer.speedRate,
+                        reverbMix: audioPlayer.reverbMix
+                    )
+                )
                 audioPlayer.updateMetadataArtist(formatArtists(libraryItem.artists))
                 player.updateScrobbleSeed(for: libraryItem)
                 

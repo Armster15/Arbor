@@ -9,15 +9,49 @@ import MediaPlayer
 import UIKit
 import SDWebImage
 
-final class AudioPlayerWithReverb: ObservableObject {
+struct AudioEffectSnapshot: Equatable {
+    let speedRate: Float
+    let pitchCents: Float
+    let reverbMix: Float
+}
+
+final class AudioPlaybackState: ObservableObject {
     @Published var isPlaying: Bool = false
-    @Published var currentTime: Double = 0
     @Published var duration: Double = 0
     @Published var isLooping: Bool = false
-    
+}
+
+final class AudioTimelineState: ObservableObject {
+    @Published var currentTime: Double = 0
+}
+
+final class AudioEffectsState: ObservableObject {
     @Published var speedRate: Float = 1.0
     @Published var pitchCents: Float = 0.0
     @Published var reverbMix: Float = 0.0
+
+    var snapshot: AudioEffectSnapshot {
+        AudioEffectSnapshot(
+            speedRate: speedRate,
+            pitchCents: pitchCents,
+            reverbMix: reverbMix
+        )
+    }
+}
+
+final class AudioPlayerWithReverb {
+    let playback: AudioPlaybackState
+    let timeline: AudioTimelineState
+    let effects: AudioEffectsState
+
+    // Read-only compatibility accessors for existing call sites.
+    var isPlaying: Bool { playback.isPlaying }
+    var currentTime: Double { timeline.currentTime }
+    var duration: Double { playback.duration }
+    var isLooping: Bool { playback.isLooping }
+    var speedRate: Float { effects.speedRate }
+    var pitchCents: Float { effects.pitchCents }
+    var reverbMix: Float { effects.reverbMix }
 
     private var elapsedSub: UInt?
     private var durationSub: UInt?
@@ -40,13 +74,20 @@ final class AudioPlayerWithReverb: ObservableObject {
     private var lastSeekRequestTime: Date?
     private var lastElapsedTime: Double?
     
-    init() {
+    init(
+        playback: AudioPlaybackState = AudioPlaybackState(),
+        timeline: AudioTimelineState = AudioTimelineState(),
+        effects: AudioEffectsState = AudioEffectsState()
+    ) {
+        self.playback = playback
+        self.timeline = timeline
+        self.effects = effects
         pitchNode = AVAudioUnitTimePitch()
         reverbNode = AVAudioUnitReverb()
                 
         // Default parameters
-        reverbNode.wetDryMix = reverbMix
-        pitchNode.rate = speedRate
+        reverbNode.wetDryMix = effects.reverbMix
+        pitchNode.rate = effects.speedRate
         
         // Connect nodes: player -> pitch -> reverb -> output
         SAPlayer.shared.audioModifiers = [pitchNode, reverbNode]
@@ -61,7 +102,7 @@ final class AudioPlayerWithReverb: ObservableObject {
     }
 
     func play(shouldRampVolume: Bool = true) {
-        isPlaying = true
+        playback.isPlaying = true
 
         // If there is a pending seek, apply it just before playing to avoid stale buffered frames
         if let target = pendingSeekTarget {
@@ -94,7 +135,7 @@ final class AudioPlayerWithReverb: ObservableObject {
 
     func pause() {      
         // required because otherwise the state will only update until after the volume finishes ramping, which takes time  
-        isPlaying = false
+        playback.isPlaying = false
         var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = 0.0
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
@@ -120,7 +161,7 @@ final class AudioPlayerWithReverb: ObservableObject {
                     SAPlayer.shared.seekTo(seconds: 0.0)
                     self.pitchNode.reset()
                     self.reverbNode.reset()
-                    self.currentTime = 0.0
+                    self.timeline.currentTime = 0.0
                     self.play()
                 }
                 return
@@ -148,7 +189,7 @@ final class AudioPlayerWithReverb: ObservableObject {
             pitchNode.reset()
             reverbNode.reset()
             // Reflect the new position optimistically; subscriptions will keep it in sync
-            currentTime = 0.0
+            timeline.currentTime = 0.0
         } else {
             SAPlayer.shared.seekTo(seconds: seconds)
         }
@@ -163,8 +204,8 @@ final class AudioPlayerWithReverb: ObservableObject {
             SAPlayer.shared.seekTo(seconds: 0.0)
             self.pitchNode.reset()
             self.reverbNode.reset()
-            self.isPlaying = false
-            self.currentTime = 0
+            self.playback.isPlaying = false
+            self.timeline.currentTime = 0
             self.pendingSeekTarget = 0.0
             self.microFadeInPending = true
             var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
@@ -184,7 +225,7 @@ final class AudioPlayerWithReverb: ObservableObject {
             SAPlayer.Features.Loop.disable()
         }
         
-        self.isLooping = new
+        self.playback.isLooping = new
     }
 
     // Adjust pitch in cents (-2400...+2400). 100 cents = 1 semitone.
@@ -193,8 +234,8 @@ final class AudioPlayerWithReverb: ObservableObject {
         if pitchNode.pitch != clamped {
             pitchNode.pitch = clamped
         }
-        if pitchCents != pitchNode.pitch {
-            pitchCents = pitchNode.pitch
+        if effects.pitchCents != pitchNode.pitch {
+            effects.pitchCents = pitchNode.pitch
         }
     }
     
@@ -204,8 +245,8 @@ final class AudioPlayerWithReverb: ObservableObject {
         if pitchNode.rate != clamped {
             pitchNode.rate = clamped
         }
-        if speedRate != pitchNode.rate {
-            speedRate = pitchNode.rate
+        if effects.speedRate != pitchNode.rate {
+            effects.speedRate = pitchNode.rate
         }
         
         // Update Now Playing info with new playback rate
@@ -221,8 +262,8 @@ final class AudioPlayerWithReverb: ObservableObject {
         if reverbNode.wetDryMix != clamped {
             reverbNode.wetDryMix = clamped
         }
-        if reverbMix != reverbNode.wetDryMix {
-            reverbMix = reverbNode.wetDryMix
+        if effects.reverbMix != reverbNode.wetDryMix {
+            effects.reverbMix = reverbNode.wetDryMix
         }
     }
 
@@ -233,7 +274,7 @@ final class AudioPlayerWithReverb: ObservableObject {
                 guard let self = self else { return }
                 let prevTime = self.lastElapsedTime
                 self.lastElapsedTime = time
-                self.currentTime = time
+                self.timeline.currentTime = time
                 var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
                 nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = time
                 MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
@@ -241,7 +282,7 @@ final class AudioPlayerWithReverb: ObservableObject {
         }
         if durationSub == nil {
             durationSub = SAPlayer.Updates.Duration.subscribe { [weak self] dur in
-                self?.duration = dur
+                self?.playback.duration = dur
                 var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
                 nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = dur
                 MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
@@ -252,7 +293,7 @@ final class AudioPlayerWithReverb: ObservableObject {
                 guard let self = self else { return }
                 switch status {
                 case .playing:
-                    self.isPlaying = true
+                    self.playback.isPlaying = true
                     // Any pending seek is now applied
                     self.pendingSeekTarget = nil
                     var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
@@ -262,24 +303,24 @@ final class AudioPlayerWithReverb: ObservableObject {
                     if self.isLooping {
                         self.seek(to: 0)
                         self.play()
-                        self.isPlaying = true
-                        self.currentTime = 0
+                        self.playback.isPlaying = true
+                        self.timeline.currentTime = 0
                         var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
                         nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = 0
                         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = self.speedRate
                         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
                     } else {
-                        self.isPlaying = false
+                        self.playback.isPlaying = false
                         self.pause()
                         self.seek(to: 0)
-                        self.currentTime = 0
+                        self.timeline.currentTime = 0
                         var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
                         nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = 0
                         nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = 0.0
                         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
                     }
                 default:
-                    self.isPlaying = false
+                    self.playback.isPlaying = false
                     var nowPlayingInfo = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
                     nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = 0.0
                     MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
