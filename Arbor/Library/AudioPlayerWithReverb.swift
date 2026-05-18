@@ -87,7 +87,8 @@ final class AudioPlayerWithReverb {
                 
         // Default parameters
         reverbNode.wetDryMix = effects.reverbMix
-        pitchNode.overlap = 32.0 // to increase quality of speed changes. see https://developer.apple.com/documentation/avfaudio/avaudiounittimepitch/overlap
+        pitchNode.overlap = 16.0 // to increase quality of speed changes. see https://developer.apple.com/documentation/avfaudio/avaudiounittimepitch/overlap
+        
         pitchNode.rate = effects.speedRate
         
         // Connect nodes: player -> pitch -> reverb -> output
