@@ -65,6 +65,7 @@ final class AudioPlayerWithReverb {
     private var metaArtwork: MPMediaItemArtwork?
     
     private var pitchNode: AVAudioUnitTimePitch
+    private var varispeedNode: AVAudioUnitVarispeed
     private var reverbNode: AVAudioUnitReverb
     
     private var volumeRampTimer: Timer? // track volume ramp timer to prevent race conditions
@@ -83,16 +84,20 @@ final class AudioPlayerWithReverb {
         self.timeline = timeline
         self.effects = effects
         pitchNode = AVAudioUnitTimePitch()
+        varispeedNode = AVAudioUnitVarispeed()
         reverbNode = AVAudioUnitReverb()
                 
         // Default parameters
         reverbNode.wetDryMix = effects.reverbMix
-        pitchNode.overlap = 16.0 // to increase quality of speed changes. see https://developer.apple.com/documentation/avfaudio/avaudiounittimepitch/overlap
+        pitchNode.overlap = 8.0
+        applyTimePitchParameters(
+            speedRate: effects.speedRate,
+            pitchCents: effects.pitchCents
+        )
         
-        pitchNode.rate = effects.speedRate
-        
-        // Connect nodes: player -> pitch -> reverb -> output
-        SAPlayer.shared.audioModifiers = [pitchNode, reverbNode]
+        // Let varispeed perform as much of the requested speed and pitch change
+        // as possible. The granular time-pitch node only handles the residual.
+        SAPlayer.shared.audioModifiers = [pitchNode, varispeedNode, reverbNode]
     }
 
     func startSavedAudio(filePath: String) {
@@ -111,8 +116,7 @@ final class AudioPlayerWithReverb {
             SAPlayer.shared.seekTo(seconds: target)
             if target <= 0.05 {
                 // Clear any internal DSP tails when starting from 0
-                pitchNode.reset()
-                reverbNode.reset()
+                resetEffectNodes()
             }
         }
 
@@ -161,8 +165,7 @@ final class AudioPlayerWithReverb {
                     guard let self = self else { return }
                     SAPlayer.shared.pause()
                     SAPlayer.shared.seekTo(seconds: 0.0)
-                    self.pitchNode.reset()
-                    self.reverbNode.reset()
+                    self.resetEffectNodes()
                     self.timeline.currentTime = 0.0
                     self.play()
                 }
@@ -172,8 +175,7 @@ final class AudioPlayerWithReverb {
             SAPlayer.shared.seekTo(seconds: seconds)
             if seconds <= 0.05 {
                 // Clear DSP tails when jumping to start while playing
-                pitchNode.reset()
-                reverbNode.reset()
+                resetEffectNodes()
             }
             return
         }
@@ -188,8 +190,7 @@ final class AudioPlayerWithReverb {
             SAPlayer.shared.pause()
             SAPlayer.shared.seekTo(seconds: 0.0)
             // Reset DSP nodes to clear internal buffers/tails
-            pitchNode.reset()
-            reverbNode.reset()
+            resetEffectNodes()
             // Reflect the new position optimistically; subscriptions will keep it in sync
             timeline.currentTime = 0.0
         } else {
@@ -204,8 +205,7 @@ final class AudioPlayerWithReverb {
             guard let self = self else { return }
             SAPlayer.shared.pause()
             SAPlayer.shared.seekTo(seconds: 0.0)
-            self.pitchNode.reset()
-            self.reverbNode.reset()
+            self.resetEffectNodes()
             self.playback.isPlaying = false
             self.timeline.currentTime = 0
             self.pendingSeekTarget = 0.0
@@ -233,22 +233,18 @@ final class AudioPlayerWithReverb {
     // Adjust pitch in cents (-2400...+2400). 100 cents = 1 semitone.
     func setPitchByCents(_ cents: Float) {
         let clamped = min(max(cents, -2400), 2400)
-        if pitchNode.pitch != clamped {
-            pitchNode.pitch = clamped
-        }
-        if effects.pitchCents != pitchNode.pitch {
-            effects.pitchCents = pitchNode.pitch
+        applyTimePitchParameters(speedRate: effects.speedRate, pitchCents: clamped)
+        if effects.pitchCents != clamped {
+            effects.pitchCents = clamped
         }
     }
     
     // Adjust playback speed (0.25x ... 2.0x)
     func setSpeedRate(_ newRate: Float) {
         let clamped = min(max(newRate, 0.25), 2.0)
-        if pitchNode.rate != clamped {
-            pitchNode.rate = clamped
-        }
-        if effects.speedRate != pitchNode.rate {
-            effects.speedRate = pitchNode.rate
+        applyTimePitchParameters(speedRate: clamped, pitchCents: effects.pitchCents)
+        if effects.speedRate != clamped {
+            effects.speedRate = clamped
         }
         
         // Update Now Playing info with new playback rate
@@ -256,6 +252,42 @@ final class AudioPlayerWithReverb {
             nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? speedRate : 0.0
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
         }
+    }
+
+    private func applyTimePitchParameters(speedRate: Float, pitchCents: Float) {
+        let requestedVarispeedPitch = 1_200 * log2(speedRate)
+        let requestedResidualPitch = pitchCents - requestedVarispeedPitch
+
+        let varispeedRate: Float
+        if requestedResidualPitch > 2_400 {
+            varispeedRate = pow(2, (pitchCents - 2_400) / 1_200)
+        } else if requestedResidualPitch < -2_400 {
+            varispeedRate = pow(2, (pitchCents + 2_400) / 1_200)
+        } else {
+            varispeedRate = speedRate
+        }
+
+        let residualPitch = min(
+            max(pitchCents - 1_200 * log2(varispeedRate), -2_400),
+            2_400
+        )
+        let residualRate = speedRate / varispeedRate
+
+        if pitchNode.rate != residualRate {
+            pitchNode.rate = residualRate
+        }
+        if pitchNode.pitch != residualPitch {
+            pitchNode.pitch = residualPitch
+        }
+        if varispeedNode.rate != varispeedRate {
+            varispeedNode.rate = varispeedRate
+        }
+    }
+
+    private func resetEffectNodes() {
+        pitchNode.reset()
+        varispeedNode.reset()
+        reverbNode.reset()
     }
         
     // Adjust reverb intensity (0-100)
