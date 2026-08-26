@@ -1,75 +1,87 @@
-import asyncio
-from googletrans import Translator
-from googletrans.models import Translated
 import json
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+
+from .utils import random_user_agent
 
 
-def _google_translate(text: str | list[str]) -> list[Translated]:
-    translator = Translator(raise_exception=True)
-    # HACKHACK: running async code in a sync function
-    translated = asyncio.run(translator.translate(text))
-
-    if isinstance(translated, Translated):
-        return [translated]
-    else:
-        return translated
+_TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
+_TRANSLATE_TIMEOUT_SECONDS = 5 * 60
 
 
-# HACKHACK: normally we'd get the romanization from the `pronunciation` attr on
-# the `Translated` object but for some reason it returns None.
+# Yes yes, we have to use `urllib` to make the request, we can't use `requests`.
 #
-# In `extra_data`, there is a `translation` key that is an array of arrays of strings.
-# The last string in the last array seems to contain the romanization. Therefore this
-# recursively traverses the `translation` array to get the last string since we don't know
-# exactly the number of dimensions of the array.
+# Why? Google is apparently rejecting requests based on how certain networking libraries deliver them.
+# This goes beyond doing things like modifying the user agent or other headers.
+# 
+# Below is an analysis of what networking libraries do/don't work:
+#   Bun fetch (JS)            -> 200
+#   urllib.request (Python)   -> 200
+#   requests (Python)         -> 429
+#   httpx (Python)            -> 429
 #
-# I am unsure how stable relying on the fact that the romanization is the last string in the last array is,
-# so this method should be treated as a hack.
-def _get_romanization(result: Translated) -> str | None:
-    def recursively_get_romanization(item: str | list[str] | None) -> str | None:
-        if isinstance(item, list):
-            return recursively_get_romanization(item[-1])
-        elif isinstance(item, str):
-            return item
-        else:
-            return None
+# Google can form an informal client fingerprint from various factors in the network stack beyond the HTTP request, including:
+# - IP address
+# - TLS handshake characteristics
+# - whether HTTP/1.1 or HTTP/2 was negotiated
+# - header ordering, casing, defaults, and compression support
+# - whether connections are reused or multiple connections are opened
+#
+# What's crazy to me is standard HTTP servers only receive a parsed, normalized HTTP request.
+# Google's edge servers terminate the TCP, TLS, and HTTP connections, so they're probably inspecting
+# the TLS handshake metadata and raw HTTP details like header ordering/casing before the normalized request ever
+# reaches the Translate service
+def _google_translate(text: str) -> tuple[str, str | None]:
+    query = urlencode(
+        [
+            ("client", "gtx"),
+            ("sl", "auto"),
+            ("tl", "en"),
+            ("dt", "t"),
+            ("dt", "rm"),
+            ("q", text),
+        ]
+    )
+    request = Request(
+        f"{_TRANSLATE_URL}?{query}",
+        headers={"User-Agent": random_user_agent(), "Accept": "*/*"},
+    )
 
-    if result.extra_data:
-        translations: list[str] | None = result.extra_data.get("translation")
-        romanization = recursively_get_romanization(translations)
+    with urlopen(request, timeout=_TRANSLATE_TIMEOUT_SECONDS) as response:
+        data = json.load(response)
 
-        # HACKHACK: sometimes the romanization text is a string of the form "it_en_2023q1.md".
-        # In these cases, ignore the romanization and simply return None.
-        if (
-            romanization
-            and romanization.endswith(".md")
-            and romanization.find(" ") == -1
-        ):
-            return None
+    segments = data[0]
+    translation = "".join(
+        segment[0]
+        for segment in segments
+        if segment and isinstance(segment[0], str)
+    )
+    romanization = next(
+        (
+            segment[3]
+            for segment in reversed(segments)
+            if len(segment) > 3 and isinstance(segment[3], str)
+        ),
+        None,
+    )
 
-        return romanization
-
-    else:
-        return None
+    return translation, romanization
 
 
-# Use this public method as the other two deal with googletrans internals
-# which aren't JSON serializable
-def translate(text: list[str]) -> str:
-    result = _google_translate(text)
-
+def translate(text: str | list[str]) -> str:
+    texts = [text] if isinstance(text, str) else text
     translations: list[str] = []
     romanizations: list[str | None] = []
 
-    for r in result:
-        translations.append(r.text)
-
-        romanization = _get_romanization(r)
+    for item in texts:
+        translation, romanization = _google_translate(item)
+        translations.append(translation)
         romanizations.append(romanization)
 
-    payload = {
-        "translations": translations,
-        "romanizations": romanizations,
-    }
-
-    return json.dumps(payload, ensure_ascii=False)
+    return json.dumps(
+        {
+            "translations": translations,
+            "romanizations": romanizations,
+        },
+        ensure_ascii=False,
+    )
