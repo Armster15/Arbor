@@ -277,8 +277,7 @@ result = get_lyrics_from_youtube('\(escaped)')
         let code = """
 import json
 import sys
-from arbor import capture_logs
-from arbor.translate import translate
+from arbor import capture_logs, translate
 payload = json.loads('\(escaped)')
 translation, log = capture_logs(translate, payload)
 if translation is None and log:
