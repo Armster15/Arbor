@@ -43,9 +43,14 @@ private struct LyricsTranslationDecodedPayload: Codable, Equatable {
     let romanizations: [String?]
 }
 
+private struct LyricsTranslationResponse: Decodable {
+    let result: String?
+    let log: String
+}
+
 enum LyricsTranslationResult {
     case loaded(LyricsTranslationPayload)
-    case failed
+    case failed(log: String?)
 }
 
 final class LyricsCache {
@@ -235,7 +240,7 @@ result = get_lyrics_from_youtube('\(escaped)')
         completion: @escaping (LyricsTranslationResult) -> Void
     ) {
         guard let youtubeVideoId = Self.youtubeVideoId(from: originalUrl) else {
-            completion(.failed)
+            completion(.failed(log: nil))
             return
         }
         translateLyrics(youtubeVideoId: youtubeVideoId, payload: payload, completion: completion)
@@ -264,28 +269,51 @@ result = get_lyrics_from_youtube('\(escaped)')
         let texts = payload.lines.map { $0.text }
         guard let data = try? JSONSerialization.data(withJSONObject: texts, options: []),
               let jsonString = String(data: data, encoding: .utf8) else {
-            completion(.failed)
+            completion(.failed(log: nil))
             return
         }
 
         let escaped = escapeForPythonString(jsonString)
         let code = """
 import json
+import sys
+from arbor import capture_logs
 from arbor.translate import translate
 payload = json.loads('\(escaped)')
-result = translate(payload)
+translation, log = capture_logs(translate, payload)
+if translation is None and log:
+    print(log, file=sys.stderr, end="")
+result = json.dumps({"result": translation, "log": log})
 """
 
         pythonExecAndGetStringAsync(
             code.trimmingCharacters(in: .whitespacesAndNewlines),
             "result"
         ) { result in
-            guard let output = result,
-                  let data = output.data(using: .utf8),
-                  let parsed = try? JSONDecoder().decode(LyricsTranslationDecodedPayload.self, from: data),
+            guard let output = result, !output.isEmpty else {
+                completion(.failed(log: nil))
+                return
+            }
+
+            guard let responseData = output.data(using: .utf8),
+                  let response = try? JSONDecoder().decode(LyricsTranslationResponse.self, from: responseData) else {
+                completion(.failed(log: output))
+                return
+            }
+
+            let capturedLog = response.log.trimmingCharacters(in: .whitespacesAndNewlines)
+            let failureLog = capturedLog.isEmpty ? nil : response.log
+
+            guard let translation = response.result, !translation.isEmpty else {
+                completion(.failed(log: failureLog))
+                return
+            }
+
+            guard let translationData = translation.data(using: .utf8),
+                  let parsed = try? JSONDecoder().decode(LyricsTranslationDecodedPayload.self, from: translationData),
                   parsed.romanizations.count == texts.count,
                   parsed.translations.count == texts.count else {
-                completion(.failed)
+                completion(.failed(log: failureLog ?? translation))
                 return
             }
 

@@ -27,6 +27,7 @@ public struct LyricsView: View {
     @State private var translatedLyricLines: [String]?
     @State private var isTranslatingLyrics: Bool = false
     @State private var currentTranslateTaskId: UUID?
+    @State private var translationFailure: TranslationFailure?
 
     private func translateLyrics() {
         guard !isTranslatingLyrics else { return }
@@ -41,8 +42,8 @@ public struct LyricsView: View {
             case .loaded(let translationPayload):
                 romanizedLyricLines = translationPayload.romanizations
                 translatedLyricLines = translationPayload.translations
-            case .failed:
-                break
+            case .failed(let log):
+                translationFailure = TranslationFailure(logText: log)
             }
         }
     }
@@ -115,6 +116,62 @@ public struct LyricsView: View {
         .onAppear {
             ensureTranslationIfNeeded(for: lyricsDisplayMode)
         }
+        .translationFailureAlert(failure: $translationFailure)
+    }
+}
+
+private struct TranslationFailure: Identifiable {
+    let id = UUID()
+    let logText: String?
+}
+
+private struct TranslationFailureLog: Identifiable {
+    let id = UUID()
+    let text: String
+}
+
+private struct TranslationFailureAlertModifier: ViewModifier {
+    @Binding var failure: TranslationFailure?
+
+    @State private var presentedLog: TranslationFailureLog?
+
+    func body(content: Content) -> some View {
+        content
+            .alert(item: $failure) { failure in
+                if let logText = failure.logText, !logText.isEmpty {
+                    return Alert(
+                        title: Text("Translation Failed"),
+                        message: Text("Failed to translate lyrics. Please try again."),
+                        primaryButton: .default(Text("View Logs")) {
+                            presentedLog = TranslationFailureLog(text: logText)
+                        },
+                        secondaryButton: .cancel(Text("OK"))
+                    )
+                }
+
+                return Alert(
+                    title: Text("Translation Failed"),
+                    message: Text("Failed to translate lyrics. Please try again."),
+                    dismissButton: .cancel(Text("OK"))
+                )
+            }
+            .sheet(item: $presentedLog) { log in
+                NavigationStack {
+                    LogViewer(
+                        title: "View Logs",
+                        logText: log.text,
+                        showClose: true
+                    )
+                }
+            }
+    }
+}
+
+private extension View {
+    func translationFailureAlert(failure: Binding<TranslationFailure?>) -> some View {
+        modifier(
+            TranslationFailureAlertModifier(failure: failure)
+        )
     }
 }
 
@@ -487,6 +544,7 @@ public struct FullScreenLyricsView: View {
     @State private var translatedLyricLines: [String]?
     @State private var isTranslatingLyrics: Bool = false
     @State private var currentTranslateTaskId: UUID?
+    @State private var translationFailure: TranslationFailure?
 
     private func translateLyricsIfNeeded() {
         guard !isTranslatingLyrics else { return }
@@ -501,8 +559,8 @@ public struct FullScreenLyricsView: View {
             case .loaded(let translationPayload):
                 romanizedLyricLines = translationPayload.romanizations
                 translatedLyricLines = translationPayload.translations
-            case .failed:
-                break
+            case .failed(let log):
+                translationFailure = TranslationFailure(logText: log)
             }
         }
     }
@@ -607,6 +665,7 @@ public struct FullScreenLyricsView: View {
         .onAppear {
             ensureTranslationIfNeeded(for: lyricsDisplayMode)
         }
+        .translationFailureAlert(failure: $translationFailure)
     }
 }
 
