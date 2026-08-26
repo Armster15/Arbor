@@ -44,6 +44,7 @@ public struct LyricsView: View {
                 romanizedLyricLines = translationPayload.romanizations
                 translatedLyricLines = translationPayload.translations
             case .failed(let log):
+                lyricsDisplayMode = .original
                 translationLogText = log
                 showTranslationErrorAlert = true
             }
@@ -555,6 +556,7 @@ public struct FullScreenLyricsView: View {
                 romanizedLyricLines = translationPayload.romanizations
                 translatedLyricLines = translationPayload.translations
             case .failed(let log):
+                lyricsDisplayMode = .original
                 translationLogText = log
                 showTranslationErrorAlert = true
             }
