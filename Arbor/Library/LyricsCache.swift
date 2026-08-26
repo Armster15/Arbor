@@ -291,19 +291,19 @@ result = json.dumps({"result": result, "log": log})
                 return
             }
 
-            guard let responseData = output.data(using: .utf8),
-                  let response = try? JSONDecoder().decode(LyricsTranslationResponse.self, from: responseData) else {
+            guard let data = output.data(using: .utf8),
+                  let response = try? JSONDecoder().decode(LyricsTranslationResponse.self, from: data) else {
                 completion(.failed(log: output))
                 return
             }
 
-            guard let translation = response.result, !translation.isEmpty else {
+            guard let resultJSON = response.result, !resultJSON.isEmpty else {
                 completion(.failed(log: response.log))
                 return
             }
 
-            guard let translationData = translation.data(using: .utf8),
-                  let parsed = try? JSONDecoder().decode(LyricsTranslationDecodedPayload.self, from: translationData),
+            guard let resultData = resultJSON.data(using: .utf8),
+                  let parsed = try? JSONDecoder().decode(LyricsTranslationDecodedPayload.self, from: resultData),
                   parsed.romanizations.count == texts.count,
                   parsed.translations.count == texts.count else {
                 completion(.failed(log: response.log))
