@@ -5,7 +5,7 @@ import json
 
 
 def _google_translate(text: str | list[str]) -> list[Translated]:
-    translator = Translator()
+    translator = Translator(raise_exception=True)
     # HACKHACK: running async code in a sync function
     translated = asyncio.run(translator.translate(text))
 
