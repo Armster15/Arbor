@@ -276,13 +276,10 @@ result = get_lyrics_from_youtube('\(escaped)')
         let escaped = escapeForPythonString(jsonString)
         let code = """
 import json
-import sys
 from arbor import capture_logs, translate
 payload = json.loads('\(escaped)')
-translation, log = capture_logs(translate, payload)
-if translation is None and log:
-    print(log, file=sys.stderr, end="")
-result = json.dumps({"result": translation, "log": log})
+result, log = capture_logs(translate, payload)
+result = json.dumps({"result": result, "log": log})
 """
 
         pythonExecAndGetStringAsync(
@@ -300,11 +297,8 @@ result = json.dumps({"result": translation, "log": log})
                 return
             }
 
-            let capturedLog = response.log.trimmingCharacters(in: .whitespacesAndNewlines)
-            let failureLog = capturedLog.isEmpty ? nil : response.log
-
             guard let translation = response.result, !translation.isEmpty else {
-                completion(.failed(log: failureLog))
+                completion(.failed(log: response.log))
                 return
             }
 
@@ -312,7 +306,7 @@ result = json.dumps({"result": translation, "log": log})
                   let parsed = try? JSONDecoder().decode(LyricsTranslationDecodedPayload.self, from: translationData),
                   parsed.romanizations.count == texts.count,
                   parsed.translations.count == texts.count else {
-                completion(.failed(log: failureLog ?? translation))
+                completion(.failed(log: response.log))
                 return
             }
 
