@@ -60,8 +60,6 @@ struct __PlayerScreen: View {
     @State private var isEditSheetPresented: Bool = false
     @State private var lyricsState: LyricsState = .idle
     @State private var currentLyricsTaskId: UUID?
-    @State private var isLyricsFullScreenPresented: Bool = false
-    @State private var activeLyricsPayload: LyricsPayload?
     
     // Track last saved settings locally (not persisted to iCloud)
     @State private var savedSpeedRate: Float?
@@ -122,18 +120,15 @@ struct __PlayerScreen: View {
     private var lyricsSection: some View {
         Group {
             if case .loaded(let payload) = lyricsState, !payload.lines.isEmpty {
-                LyricsView(
+                LyricsPresentationView(
                     payload: payload,
                     audioPlayer: audioPlayer,
-                    playback: audioPlayer.playback,
-                    timeline: audioPlayer.timeline,
+                    title: libraryItem.title,
+                    artistSummary: libraryItem.artists.joined(separator: ", "),
                     originalUrl: libraryItem.original_url,
-                    lyricsDisplayMode: $lyricsDisplayMode,
-                    onExpand: {
-                        activeLyricsPayload = payload
-                        isLyricsFullScreenPresented = true
-                    }
+                    lyricsDisplayMode: $lyricsDisplayMode
                 )
+                .id(libraryItem.original_url)
             }
         }
         .animation(.easeOut(duration: 0.35), value: lyricsState)
@@ -235,22 +230,6 @@ struct __PlayerScreen: View {
                 isPresented: $isEditSheetPresented
             )
         )
-        .fullScreenCover(isPresented: $isLyricsFullScreenPresented, onDismiss: {
-            activeLyricsPayload = nil
-        }) {
-            if let activeLyricsPayload {
-                FullScreenLyricsView(
-                    payload: activeLyricsPayload,
-                    audioPlayer: audioPlayer,
-                    playback: audioPlayer.playback,
-                    timeline: audioPlayer.timeline,
-                    title: libraryItem.title,
-                    artistSummary: libraryItem.artists.joined(separator: ", "),
-                    originalUrl: libraryItem.original_url,
-                    lyricsDisplayMode: $lyricsDisplayMode
-                )
-            }
-        }
     }
 }
 

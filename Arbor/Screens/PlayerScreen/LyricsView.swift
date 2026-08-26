@@ -14,60 +14,48 @@ public enum LyricsDisplayMode: String, CaseIterable {
     case translated = "Translated"
 }
 
+enum LyricsTranslationState {
+    case idle
+    case loading(LyricsTranslationRequest)
+    case loaded(request: LyricsTranslationRequest, payload: LyricsTranslationPayload)
+
+    func payload(for source: LyricsPayload) -> LyricsTranslationPayload? {
+        guard case .loaded(let request, let payload) = self,
+              request.payload == source else { return nil }
+        return payload
+    }
+
+    var isLoading: Bool {
+        guard case .loading = self else { return false }
+        return true
+    }
+
+    var request: LyricsTranslationRequest? {
+        guard case .loading(let request) = self else { return nil }
+        return request
+    }
+
+    var taskId: UUID? {
+        request?.id
+    }
+}
+
+struct LyricsTranslationRequest {
+    let id = UUID()
+    let originalUrl: String
+    let payload: LyricsPayload
+}
+
 public struct LyricsView: View {
     let payload: LyricsPayload
     let audioPlayer: AudioPlayerWithReverb
-    @ObservedObject var playback: AudioPlaybackState
-    @ObservedObject var timeline: AudioTimelineState
-    let originalUrl: String
-    @Binding var lyricsDisplayMode: LyricsDisplayMode
+    let playback: AudioPlaybackState
+    let timeline: AudioTimelineState
+    let translationPayload: LyricsTranslationPayload?
+    let isTranslatingLyrics: Bool
+    let lyricsDisplayMode: LyricsDisplayMode
+    let onSelectMode: (LyricsDisplayMode) -> Void
     let onExpand: () -> Void
-
-    @State private var romanizedLyricLines: [String]?
-    @State private var translatedLyricLines: [String]?
-    @State private var isTranslatingLyrics: Bool = false
-    @State private var currentTranslateTaskId: UUID?
-    @State private var showTranslationErrorAlert = false
-    @State private var translationLogText: String?
-
-    private func translateLyrics() {
-        guard !isTranslatingLyrics else { return }
-        isTranslatingLyrics = true
-        let taskId = UUID()
-        currentTranslateTaskId = taskId
-        LyricsCache.shared.translateLyrics(originalUrl: originalUrl, payload: payload) { result in
-            guard taskId == currentTranslateTaskId else { return }
-            isTranslatingLyrics = false
-
-            switch result {
-            case .loaded(let translationPayload):
-                romanizedLyricLines = translationPayload.romanizations
-                translatedLyricLines = translationPayload.translations
-            case .failed(let log):
-                lyricsDisplayMode = .original
-                translationLogText = log
-                showTranslationErrorAlert = true
-            }
-        }
-    }
-
-    private func resetTranslationState() {
-        romanizedLyricLines = nil
-        translatedLyricLines = nil
-        lyricsDisplayMode = .original
-        isTranslatingLyrics = false
-        currentTranslateTaskId = nil
-    }
-
-    private func ensureTranslationIfNeeded(for mode: LyricsDisplayMode) {
-        let needsTranslation = (mode == .romanized || mode == .translated)
-            && (romanizedLyricLines == nil || translatedLyricLines == nil)
-        if needsTranslation {
-            DispatchQueue.main.async {
-                translateLyrics()
-            }
-        }
-    }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -76,13 +64,9 @@ public struct LyricsView: View {
                 lyricsDisplayMode: lyricsDisplayMode,
                 lyricsSource: payload.source,
                 showsExpand: true,
-                onExpand: {
-                    onExpand()
-                }
-            ) { mode in
-                lyricsDisplayMode = mode
-                ensureTranslationIfNeeded(for: mode)
-            }
+                onExpand: onExpand,
+                onSelect: onSelectMode
+            )
 
             LyricsLinesView(
                 payload: payload,
@@ -90,8 +74,8 @@ public struct LyricsView: View {
                 playback: playback,
                 timeline: timeline,
                 lyricsDisplayMode: lyricsDisplayMode,
-                romanizedLyricLines: romanizedLyricLines,
-                translatedLyricLines: translatedLyricLines,
+                romanizedLyricLines: translationPayload?.romanizations,
+                translatedLyricLines: translationPayload?.translations,
                 isAutoScrollEnabled: .constant(true),
                 allowsUserScroll: false,
                 timedLineFont: lyricUIFont(textStyle: .title3, weight: .semibold),
@@ -104,31 +88,18 @@ public struct LyricsView: View {
                     onExpand()
                 }
             )
-            .onChange(of: lyricsDisplayMode) { _, newValue in
-                ensureTranslationIfNeeded(for: newValue)
-            }
-            .onChange(of: payload) { _, _ in
-                resetTranslationState()
-            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color("SecondaryBg"))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .transition(.move(edge: .bottom).combined(with: .opacity))
-        .onAppear {
-            ensureTranslationIfNeeded(for: lyricsDisplayMode)
-        }
-        .translationFailureAlert(
-            isPresented: $showTranslationErrorAlert,
-            logText: translationLogText
-        )
     }
 }
 
 private struct TranslationFailureAlertModifier: ViewModifier {
     @Binding var isPresented: Bool
-    let logText: String?
+    @Binding var logText: String?
 
     @State private var showLogSheet = false
 
@@ -159,7 +130,7 @@ private struct TranslationFailureAlertModifier: ViewModifier {
 private extension View {
     func translationFailureAlert(
         isPresented: Binding<Bool>,
-        logText: String?
+        logText: Binding<String?>
     ) -> some View {
         modifier(
             TranslationFailureAlertModifier(
@@ -167,6 +138,129 @@ private extension View {
                 logText: logText
             )
         )
+    }
+}
+
+struct LyricsPresentationView: View {
+    let payload: LyricsPayload
+    let audioPlayer: AudioPlayerWithReverb
+    let title: String
+    let artistSummary: String
+    let originalUrl: String
+    @Binding var lyricsDisplayMode: LyricsDisplayMode
+
+    @State private var translationState = LyricsTranslationState.idle
+    @State private var isFullScreenPresented = false
+    @State private var showTranslationErrorAlert = false
+    @State private var translationLogText: String?
+
+    private var compactFailureAlertBinding: Binding<Bool> {
+        Binding(
+            get: {
+                !isFullScreenPresented && showTranslationErrorAlert
+            },
+            set: { isPresented in
+                guard !isFullScreenPresented else { return }
+                showTranslationErrorAlert = isPresented
+            }
+        )
+    }
+
+    private func selectMode(_ mode: LyricsDisplayMode) {
+        lyricsDisplayMode = mode
+        translateIfNeeded(for: mode)
+    }
+
+    private func translateIfNeeded(for mode: LyricsDisplayMode) {
+        guard mode != .original else { return }
+        guard case .idle = translationState else { return }
+
+        showTranslationErrorAlert = false
+        translationLogText = nil
+
+        translationState = .loading(
+            LyricsTranslationRequest(
+                originalUrl: originalUrl,
+                payload: payload
+            )
+        )
+    }
+
+    private static func translate(
+        _ request: LyricsTranslationRequest
+    ) async -> LyricsTranslationResult {
+        await withCheckedContinuation { continuation in
+            LyricsCache.shared.translateLyrics(
+                originalUrl: request.originalUrl,
+                payload: request.payload,
+                completion: { continuation.resume(returning: $0) }
+            )
+        }
+    }
+
+    private func resetTranslation() {
+        translationState = .idle
+        lyricsDisplayMode = .original
+        isFullScreenPresented = false
+        showTranslationErrorAlert = false
+        translationLogText = nil
+    }
+
+    var body: some View {
+        LyricsView(
+            payload: payload,
+            audioPlayer: audioPlayer,
+            playback: audioPlayer.playback,
+            timeline: audioPlayer.timeline,
+            translationPayload: translationState.payload(for: payload),
+            isTranslatingLyrics: translationState.isLoading,
+            lyricsDisplayMode: lyricsDisplayMode,
+            onSelectMode: selectMode,
+            onExpand: { isFullScreenPresented = true }
+        )
+        .onAppear {
+            translateIfNeeded(for: lyricsDisplayMode)
+        }
+        .onChange(of: payload) { _, _ in
+            resetTranslation()
+        }
+        .task(id: translationState.taskId) { [request = translationState.request] in
+            guard let request else { return }
+            let result = await Self.translate(request)
+            guard !Task.isCancelled,
+                  request.id == translationState.request?.id else { return }
+
+            switch result {
+            case .loaded(let payload):
+                translationState = .loaded(request: request, payload: payload)
+            case .failed(let log):
+                translationState = .idle
+                lyricsDisplayMode = .original
+                translationLogText = log
+                showTranslationErrorAlert = true
+            }
+        }
+        .translationFailureAlert(
+            isPresented: compactFailureAlertBinding,
+            logText: $translationLogText
+        )
+        .fullScreenCover(isPresented: $isFullScreenPresented) {
+            FullScreenLyricsView(
+                payload: payload,
+                audioPlayer: audioPlayer,
+                playback: audioPlayer.playback,
+                timeline: audioPlayer.timeline,
+                translationState: $translationState,
+                title: title,
+                artistSummary: artistSummary,
+                lyricsDisplayMode: $lyricsDisplayMode,
+                onSelectMode: selectMode
+            )
+            .translationFailureAlert(
+                isPresented: $showTranslationErrorAlert,
+                logText: $translationLogText
+            )
+        }
     }
 }
 
@@ -526,57 +620,16 @@ private struct LyricsHeaderView: View, Equatable {
 public struct FullScreenLyricsView: View {
     let payload: LyricsPayload
     let audioPlayer: AudioPlayerWithReverb
-    @ObservedObject var playback: AudioPlaybackState
-    @ObservedObject var timeline: AudioTimelineState
+    let playback: AudioPlaybackState
+    let timeline: AudioTimelineState
+    @Binding var translationState: LyricsTranslationState
     let title: String
     let artistSummary: String
-    let originalUrl: String
     @Binding var lyricsDisplayMode: LyricsDisplayMode
+    let onSelectMode: (LyricsDisplayMode) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var isAutoScrollEnabled: Bool = true
-    @State private var romanizedLyricLines: [String]?
-    @State private var translatedLyricLines: [String]?
-    @State private var isTranslatingLyrics: Bool = false
-    @State private var currentTranslateTaskId: UUID?
-    @State private var showTranslationErrorAlert = false
-    @State private var translationLogText: String?
-
-    private func translateLyricsIfNeeded() {
-        guard !isTranslatingLyrics else { return }
-        isTranslatingLyrics = true
-        let taskId = UUID()
-        currentTranslateTaskId = taskId
-        LyricsCache.shared.translateLyrics(originalUrl: originalUrl, payload: payload) { result in
-            guard taskId == currentTranslateTaskId else { return }
-            isTranslatingLyrics = false
-
-            switch result {
-            case .loaded(let translationPayload):
-                romanizedLyricLines = translationPayload.romanizations
-                translatedLyricLines = translationPayload.translations
-            case .failed(let log):
-                lyricsDisplayMode = .original
-                translationLogText = log
-                showTranslationErrorAlert = true
-            }
-        }
-    }
-
-    private func handleLyricsDisplayModeChange(_ mode: LyricsDisplayMode) {
-        lyricsDisplayMode = mode
-        ensureTranslationIfNeeded(for: mode)
-    }
-
-    private func ensureTranslationIfNeeded(for mode: LyricsDisplayMode) {
-        let needsTranslation = (mode == .romanized || mode == .translated)
-            && (romanizedLyricLines == nil || translatedLyricLines == nil)
-        if needsTranslation {
-            DispatchQueue.main.async {
-                translateLyricsIfNeeded()
-            }
-        }
-    }
 
     public var body: some View {
         ZStack {
@@ -620,8 +673,8 @@ public struct FullScreenLyricsView: View {
                     playback: playback,
                     timeline: timeline,
                     lyricsDisplayMode: lyricsDisplayMode,
-                    romanizedLyricLines: romanizedLyricLines,
-                    translatedLyricLines: translatedLyricLines,
+                    romanizedLyricLines: translationState.payload(for: payload)?.romanizations,
+                    translatedLyricLines: translationState.payload(for: payload)?.translations,
                     isAutoScrollEnabled: $isAutoScrollEnabled,
                     allowsUserScroll: true,
                     timedLineFont: UIFont.systemFont(ofSize: 24, weight: .semibold),
@@ -637,12 +690,10 @@ public struct FullScreenLyricsView: View {
                     FullScreenLyricsFooterControls(
                         isAutoScrollEnabled: isAutoScrollEnabled,
                         lyricsDisplayMode: lyricsDisplayMode,
-                        isTranslatingLyrics: isTranslatingLyrics,
+                        isTranslatingLyrics: translationState.isLoading,
                         lyricsSource: payload.source,
                         onSync: { isAutoScrollEnabled = true },
-                        onSelectMode: { mode in
-                            handleLyricsDisplayModeChange(mode)
-                        }
+                        onSelectMode: onSelectMode
                     )
                     .equatable()
 
@@ -657,16 +708,6 @@ public struct FullScreenLyricsView: View {
             .padding(.top, 12)
             .padding(.bottom, 28)
         }
-        .onChange(of: lyricsDisplayMode) { _, newValue in
-            ensureTranslationIfNeeded(for: newValue)
-        }
-        .onAppear {
-            ensureTranslationIfNeeded(for: lyricsDisplayMode)
-        }
-        .translationFailureAlert(
-            isPresented: $showTranslationErrorAlert,
-            logText: translationLogText
-        )
     }
 }
 
