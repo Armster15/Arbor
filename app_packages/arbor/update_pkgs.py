@@ -1,10 +1,13 @@
-from pathlib import Path
-from .pip_exec import pip_exec
 import importlib.metadata as metadata
-import re
 import shutil
+import tempfile
 import traceback
+from pathlib import Path
+
+from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
+
+from .pip_exec import pip_exec
 
 # Base folders
 __dirname = Path(__file__).resolve().parent  # node.js my beloved
@@ -19,23 +22,48 @@ requirements_txt_path = root_dir / "requirements.txt"
 
 def update_pkgs() -> bool:
     try:
-        result = pip_exec(
-            [
-                "install",
-                "--platform=any",
-                "--only-binary=:all:",
-                "--upgrade",
-                "--target=" + str(updated_python_modules_dir),
-                "-r",
-                str(requirements_txt_path),
-            ]
-        )
-        success = result == 0
-    except Exception:
-        success = False
-        traceback.print_exc()
+        application_support_dir.mkdir(parents=True, exist_ok=True)
 
-    return success
+        # pip can leave old metadata behind when updating an existing target folder. Install
+        # into a fresh folder, keep the old one as a backup, then swap them. If the
+        # swap fails, put the backup back.
+        with tempfile.TemporaryDirectory(
+            dir=application_support_dir, ignore_cleanup_errors=True
+        ) as temp_dir:
+            work_dir = Path(temp_dir)
+            staged_dir = work_dir / "staged"
+            backup_dir = work_dir / "backup"
+
+            result = pip_exec(
+                [
+                    "install",
+                    "--platform=any",
+                    "--only-binary=:all:",
+                    "--target=" + str(staged_dir),
+                    "-r",
+                    str(requirements_txt_path),
+                ]
+            )
+
+            if result != 0:
+                return False
+
+            # no "else" is needed because on the first update there is nothing to back up
+            if updated_python_modules_dir.exists():
+                updated_python_modules_dir.replace(backup_dir)
+
+            try:
+                staged_dir.replace(updated_python_modules_dir)
+            except Exception:
+                if backup_dir.exists():
+                    backup_dir.replace(updated_python_modules_dir)
+                raise
+
+        return True
+
+    except Exception:
+        traceback.print_exc()
+        return False
 
 
 def are_pkgs_updated() -> bool:
@@ -48,7 +76,6 @@ def delete_updated_pkgs():
 
 
 def get_dependency_versions() -> list[dict]:
-    # Parses a requirements.txt file and returns a list of package names
     def _parse_requirements(path: Path) -> list[str]:
         names: list[str] = []
 
@@ -57,9 +84,7 @@ def get_dependency_versions() -> list[dict]:
             if not line or line.startswith("-"):
                 continue
 
-            name = re.split(r"[<>=!~\[]", line, maxsplit=1)[0].strip()
-            if name:
-                names.append(name)
+            names.append(Requirement(line).name)
 
         return names
 
