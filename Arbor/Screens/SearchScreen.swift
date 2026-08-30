@@ -209,12 +209,16 @@ struct DownloadScreen: View {
     @Binding var selectedResult: SearchResult?
     var clearSelectionOnFailure: Bool = true
     
-    @State private var isLoading: Bool = false
     @State private var idleOpacity: Double = 1.0
     @State private var showDownloadErrorAlert = false
     @State private var downloadErrorMessage = ""
     @State private var downloadLogText: String? = nil
     @State private var showDownloadLogSheet = false
+    @State private var activeDownloadID: UUID? = nil
+
+    private var isLoading: Bool {
+        activeDownloadID != nil
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -288,7 +292,11 @@ struct DownloadScreen: View {
             triggerDownloadIfPossible()
         }
         .onChange(of: selectedResult?.url) { _, _ in
+            activeDownloadID = nil
             triggerDownloadIfPossible()
+        }
+        .onDisappear {
+            activeDownloadID = nil
         }
     }
     
@@ -300,13 +308,17 @@ struct DownloadScreen: View {
     }
     
     private func downloadAudio(with url: String) {
-        isLoading = true
+        let downloadID = UUID()
+        activeDownloadID = downloadID
         downloadLogText = nil
         showDownloadLogSheet = false
         
         AudioDownloader.download(from: url, searchResult: selectedResult) { result in
             DispatchQueue.main.async {
-                self.isLoading = false
+                guard self.activeDownloadID == downloadID,
+                      self.selectedResult?.url == url else { return }
+
+                self.activeDownloadID = nil
                 
                 switch result {
                 case .success(let meta):
