@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UIKit
+import WebKit
 
 public enum LyricsDisplayMode: String, CaseIterable {
     case original = "Original"
@@ -176,6 +177,7 @@ struct LyricsPresentationView: View {
 
     @State private var translationState = LyricsTranslationState.idle
     @State private var isFullScreenPresented = false
+    @ObservedObject private var googleTranslateService = GoogleTranslateService.shared
 
     private func selectMode(_ mode: LyricsDisplayMode) {
         lyricsDisplayMode = mode
@@ -232,6 +234,16 @@ struct LyricsPresentationView: View {
             onSelectMode: selectMode,
             onExpand: { isFullScreenPresented = true }
         )
+        .background(alignment: .topLeading) {
+            if let webView = googleTranslateService.activeWebView {
+                ActiveTranslationWebView(webView: webView)
+                    .frame(width: 1, height: 1)
+                    .opacity(0.01)
+                    .clipped()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
         .onAppear {
             translateIfNeeded(for: lyricsDisplayMode)
         }
@@ -274,6 +286,16 @@ struct LyricsPresentationView: View {
             .translationFailureAlert($translationState)
         }
     }
+}
+
+private struct ActiveTranslationWebView: UIViewRepresentable {
+    let webView: WKWebView
+
+    func makeUIView(context: Context) -> WKWebView {
+        webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {}
 }
 
 // Minimal UIKit label wrapper to fix SwiftUI Text horizontal scrolling bug
