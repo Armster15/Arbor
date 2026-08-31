@@ -500,10 +500,13 @@ private struct LyricsLinesView: View {
                             for: payload,
                             currentTimeMs: newMs
                         )
-                        if let jumpedIndex {
-                            lastActiveLyricIndex = jumpedIndex
+                        if jumpedIndex != lastActiveLyricIndex {
+                            scrollToActiveLyric(
+                                proxy,
+                                activeIndex: jumpedIndex,
+                                shouldAnimate: newMs > lastMs
+                            )
                         }
-                        scrollToActiveLyric(proxy, activeIndex: jumpedIndex, shouldAnimate: false)
                     }
                     if newMs < lastMs && newMs < 500 {
                         lastActiveLyricIndex = 0
