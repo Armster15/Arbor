@@ -5,6 +5,9 @@ import WebKit
 private let googleTranslateRomanizationSelector = #"[jsname="toZopb"]"#
 private let googleTranslateTranslationSelector = #"[jsname="W297wb"]"#
 private let googleTranslateUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
+private let googleTranslatePageLoadTimeout: TimeInterval = 60
+private let googleTranslateResultTimeout: TimeInterval = 30
+private let googleTranslatePollInterval: TimeInterval = 0.25
 
 enum GoogleTranslateResult {
     case loaded(translation: String?, romanization: String?)
@@ -48,7 +51,7 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
 
     private let text: String
     private var completion: ((GoogleTranslateResult) -> Void)?
-    private var timeoutTimer: Timer?
+    private var stageTimeoutTimer: Timer?
     private(set) var webView: WKWebView!
 
     var onFinish: (() -> Void)?
@@ -83,16 +86,25 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
             return
         }
 
-        timeoutTimer = Timer.scheduledTimer(withTimeInterval: 45, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                self?.finish(.failed("Google Translate timed out."))
-            }
-        }
+        startTimeout(
+            after: googleTranslatePageLoadTimeout,
+            result: .failed("Google Translate page load timed out.")
+        )
         webView.load(URLRequest(url: url))
     }
 
     func cancel() {
         finish(.failed("Translation was cancelled."))
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        didFinish navigation: WKNavigation!
+    ) {
+        startTimeout(
+            after: googleTranslateResultTimeout + googleTranslatePollInterval,
+            result: .failed("Google Translate result timed out.")
+        )
     }
 
     func webView(
@@ -155,7 +167,7 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
         guard let completion else { return }
         self.completion = nil
 
-        timeoutTimer?.invalidate()
+        stageTimeoutTimer?.invalidate()
         webView.stopLoading()
         webView.navigationDelegate = nil
         webView.configuration.userContentController.removeScriptMessageHandler(
@@ -165,6 +177,18 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
         completion(result)
         onFinish?()
         onFinish = nil
+    }
+
+    private func startTimeout(
+        after interval: TimeInterval,
+        result: GoogleTranslateResult
+    ) {
+        stageTimeoutTimer?.invalidate()
+        stageTimeoutTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.finish(result)
+            }
+        }
     }
 
     private static let extractionScript = """
@@ -179,7 +203,8 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
     var previousPayload = null
     var stablePolls = 0
     var translationPolls = 0
-    var polls = 0
+    const startedAt = Date.now()
+    const resultTimeout = \(googleTranslateResultTimeout * 1_000)
 
     const timer = setInterval(() => {
         const payload = {
@@ -205,11 +230,11 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
         if (romanizationReady || romanizationWaitExpired) {
             clearInterval(timer)
             window.webkit.messageHandlers.translation.postMessage(serialized)
-        } else if (++polls >= 120) {
+        } else if (Date.now() - startedAt >= resultTimeout) {
             clearInterval(timer)
             window.webkit.messageHandlers.translation.postMessage(serialized)
         }
-    }, 250)
+    }, \(googleTranslatePollInterval * 1_000))
 })()
 """
 }
