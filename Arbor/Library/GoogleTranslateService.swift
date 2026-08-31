@@ -7,7 +7,7 @@ private let googleTranslateTranslationSelector = #"[jsname="W297wb"]"#
 private let googleTranslateUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
 
 enum GoogleTranslateResult {
-    case loaded(translation: String, romanization: String?)
+    case loaded(translation: String?, romanization: String?)
     case failed(String)
 }
 
@@ -131,10 +131,13 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
 
         if let error = payload.error {
             finish(.failed(error))
-        } else if let translation = payload.translation {
-            finish(.loaded(translation: translation, romanization: payload.romanization))
         } else {
-            finish(.failed("Google Translate returned no translation."))
+            finish(
+                .loaded(
+                    translation: payload.translation,
+                    romanization: payload.romanization
+                )
+            )
         }
     }
 
@@ -204,9 +207,7 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
             window.webkit.messageHandlers.translation.postMessage(serialized)
         } else if (++polls >= 120) {
             clearInterval(timer)
-            window.webkit.messageHandlers.translation.postMessage(JSON.stringify({
-                error: 'Google Translate did not render a translation.'
-            }))
+            window.webkit.messageHandlers.translation.postMessage(serialized)
         }
     }, 250)
 })()

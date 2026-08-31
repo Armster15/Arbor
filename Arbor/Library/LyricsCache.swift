@@ -1,6 +1,7 @@
 import Foundation
 
 private let googleTranslateLineSeparator = "\u{E000}"
+private let missingTranslationText = "null"
 
 enum LyricsSource: String, Codable {
     case youtube = "YouTube"
@@ -51,7 +52,7 @@ final class LyricsCache {
 
     private static let directoryName = "LyricsCache"
     private let lyricsCachePrefix = ["lyrics"]
-    private let translationCachePrefix = ["lyricsTranslationWebViewV2"]
+    private let translationCachePrefix = ["lyricsTranslation"]
 
     static func cacheDirectoryPath() -> String? {
         shared.directoryURL?.path
@@ -272,31 +273,47 @@ result = get_lyrics_from_youtube('\(escaped)')
                 return
             }
 
-            let translatedLines = self.lines(in: translation)
-            guard translatedLines.count == sourceLines.count else {
-                completion(.failed(log: "Google Translate returned a different number of lyric lines."))
+            let extractedTranslations = translation.map { self.lines(in: $0) }
+            if let extractedTranslations,
+               extractedTranslations.count != sourceLines.count {
+                completion(
+                    .failed(log: "Google Translate returned a different number of translated lyric lines.")
+                )
                 return
             }
 
             let extractedRomanizations = romanization.map { self.lines(in: $0) }
-            let romanizedLines: [String]
             if let extractedRomanizations,
-               extractedRomanizations.count == sourceLines.count {
-                romanizedLines = extractedRomanizations.enumerated().map { index, value in
+               extractedRomanizations.count != sourceLines.count {
+                completion(
+                    .failed(log: "Google Translate returned a different number of romanized lyric lines.")
+                )
+                return
+            }
+
+            let missingLines = Array(
+                repeating: missingTranslationText,
+                count: sourceLines.count
+            )
+            let romanizedLines: [String]
+            if let extractedRomanizations {
+                romanizedLines = extractedRomanizations.map { value in
                     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                    return trimmed.isEmpty ? sourceLines[index] : trimmed
+                    return trimmed.isEmpty ? missingTranslationText : trimmed
                 }
             } else {
-                romanizedLines = sourceLines
+                romanizedLines = missingLines
             }
             let sanitizedPayload = LyricsTranslationPayload(
-                translations: translatedLines,
+                translations: extractedTranslations ?? missingLines,
                 romanizations: romanizedLines
             )
-            if let encoded = try? JSONEncoder().encode(sanitizedPayload) {
+            if translation != nil,
+               romanization != nil,
+               let encoded = try? JSONEncoder().encode(sanitizedPayload) {
                 self.saveTranslationToDisk(data: encoded, youtubeVideoId: youtubeVideoId)
+                self.setTranslationInMemory(sanitizedPayload, youtubeVideoId: youtubeVideoId)
             }
-            self.setTranslationInMemory(sanitizedPayload, youtubeVideoId: youtubeVideoId)
             completion(.loaded(sanitizedPayload))
         }
     }
@@ -397,7 +414,7 @@ result = get_lyrics_from_youtube('\(escaped)')
 
     private func translationFileURL(for youtubeVideoId: String) -> URL? {
         guard let dirURL = ensureDirectory() else { return nil }
-        let filename = sanitizedFileName(youtubeVideoId) + ".webview-v2-translations"
+        let filename = sanitizedFileName(youtubeVideoId) + ".translations"
         return dirURL.appendingPathComponent(filename).appendingPathExtension("json")
     }
 
