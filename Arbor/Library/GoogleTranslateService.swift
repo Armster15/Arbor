@@ -175,6 +175,7 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
     let translationSelector = '\(googleTranslateTranslationSelector)'
     var previousPayload = null
     var stablePolls = 0
+    var translationPolls = 0
     var polls = 0
 
     const timer = setInterval(() => {
@@ -184,6 +185,10 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
         }
         const serialized = JSON.stringify(payload)
 
+        if (payload.translation) {
+            translationPolls += 1
+        }
+
         if (payload.translation && serialized === previousPayload) {
             stablePolls += 1
         } else {
@@ -191,7 +196,10 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
             previousPayload = serialized
         }
 
-        if (stablePolls >= 4) {
+        const romanizationReady = payload.romanization && stablePolls >= 4
+        const romanizationWaitExpired = translationPolls >= 20 && stablePolls >= 4
+
+        if (romanizationReady || romanizationWaitExpired) {
             clearInterval(timer)
             window.webkit.messageHandlers.translation.postMessage(serialized)
         } else if (++polls >= 120) {

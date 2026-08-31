@@ -236,12 +236,15 @@ struct LyricsPresentationView: View {
         )
         .background(alignment: .topLeading) {
             if let webView = googleTranslateService.activeWebView {
-                ActiveTranslationWebView(webView: webView)
-                    .frame(width: 1, height: 1)
-                    .opacity(0.01)
-                    .clipped()
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+                ZStack(alignment: .topLeading) {
+                    ActiveTranslationWebView(webView: webView)
+                        .frame(width: 390, height: 844)
+                }
+                .frame(width: 1, height: 1)
+                .opacity(0.01)
+                .clipped()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
             }
         }
         .onAppear {

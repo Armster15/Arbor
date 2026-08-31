@@ -51,7 +51,7 @@ final class LyricsCache {
 
     private static let directoryName = "LyricsCache"
     private let lyricsCachePrefix = ["lyrics"]
-    private let translationCachePrefix = ["lyricsTranslationWebView"]
+    private let translationCachePrefix = ["lyricsTranslationWebViewV2"]
 
     static func cacheDirectoryPath() -> String? {
         shared.directoryURL?.path
@@ -397,7 +397,7 @@ result = get_lyrics_from_youtube('\(escaped)')
 
     private func translationFileURL(for youtubeVideoId: String) -> URL? {
         guard let dirURL = ensureDirectory() else { return nil }
-        let filename = sanitizedFileName(youtubeVideoId) + ".webview-translations"
+        let filename = sanitizedFileName(youtubeVideoId) + ".webview-v2-translations"
         return dirURL.appendingPathComponent(filename).appendingPathExtension("json")
     }
 
