@@ -3,6 +3,7 @@ import WebKit
 
 private let googleTranslateRomanizationSelector = #"[jsname="toZopb"]"#
 private let googleTranslateTranslationSelector = #"[jsname="W297wb"]"#
+private let googleTranslateUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
 
 enum GoogleTranslateResult {
     case loaded(translation: String, romanization: String?)
@@ -40,7 +41,6 @@ final class GoogleTranslateService {
 @MainActor
 private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
     private static let messageHandlerName = "translation"
-    private static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
 
     private let text: String
     private var completion: ((GoogleTranslateResult) -> Void)?
@@ -68,7 +68,7 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
         )
 
         webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.customUserAgent = Self.userAgent
+        webView.customUserAgent = googleTranslateUserAgent
         webView.isInspectable = true
         webView.navigationDelegate = self
     }
