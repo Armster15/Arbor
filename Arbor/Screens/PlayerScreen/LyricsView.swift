@@ -7,7 +7,6 @@
 
 import SwiftUI
 import UIKit
-import WebKit
 
 public enum LyricsDisplayMode: String, CaseIterable {
     case original = "Original"
@@ -177,18 +176,6 @@ struct LyricsPresentationView: View {
 
     @State private var translationState = LyricsTranslationState.idle
     @State private var isFullScreenPresented = false
-    @ObservedObject private var googleTranslateService = GoogleTranslateService.shared
-
-    private var isTranslationWebViewPresented: Binding<Bool> {
-        Binding(
-            get: { googleTranslateService.webView != nil },
-            set: { isPresented in
-                if !isPresented {
-                    googleTranslateService.dismissWebView()
-                }
-            }
-        )
-    }
 
     private func selectMode(_ mode: LyricsDisplayMode) {
         lyricsDisplayMode = mode
@@ -272,26 +259,6 @@ struct LyricsPresentationView: View {
             $translationState,
             isEnabled: !isFullScreenPresented
         )
-        .sheet(isPresented: isTranslationWebViewPresented) {
-            NavigationStack {
-                Group {
-                    if let webView = googleTranslateService.webView {
-                        TranslationDebugWebView(webView: webView)
-                    } else {
-                        ProgressView("Loading Google Translate…")
-                    }
-                }
-                .navigationTitle("Google Translate")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") {
-                            googleTranslateService.dismissWebView()
-                        }
-                    }
-                }
-            }
-        }
         .fullScreenCover(isPresented: $isFullScreenPresented) {
             FullScreenLyricsView(
                 payload: payload,
@@ -307,16 +274,6 @@ struct LyricsPresentationView: View {
             .translationFailureAlert($translationState)
         }
     }
-}
-
-private struct TranslationDebugWebView: UIViewRepresentable {
-    let webView: WKWebView
-
-    func makeUIView(context: Context) -> WKWebView {
-        webView
-    }
-
-    func updateUIView(_ webView: WKWebView, context: Context) {}
 }
 
 // Minimal UIKit label wrapper to fix SwiftUI Text horizontal scrolling bug

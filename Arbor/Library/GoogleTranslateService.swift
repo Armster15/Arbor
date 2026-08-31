@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 import WebKit
 
@@ -11,10 +10,9 @@ enum GoogleTranslateResult {
 }
 
 @MainActor
-final class GoogleTranslateService: ObservableObject {
+final class GoogleTranslateService {
     static let shared = GoogleTranslateService()
 
-    @Published private(set) var webView: WKWebView?
     private var activeRequest: GoogleTranslateRequest?
 
     private init() {}
@@ -31,17 +29,11 @@ final class GoogleTranslateService: ObservableObject {
             self?.activeRequest = nil
         }
         activeRequest = request
-        webView = request.webView
         request.start()
     }
 
     func cancel() {
         activeRequest?.cancel()
-        webView = nil
-    }
-
-    func dismissWebView() {
-        webView = nil
     }
 }
 
@@ -53,7 +45,7 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
     private let text: String
     private var completion: ((GoogleTranslateResult) -> Void)?
     private var timeoutTimer: Timer?
-    private(set) var webView: WKWebView!
+    private var webView: WKWebView!
 
     var onFinish: (() -> Void)?
 
