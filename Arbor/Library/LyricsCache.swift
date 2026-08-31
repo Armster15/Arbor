@@ -1,5 +1,7 @@
 import Foundation
 
+private let googleTranslateLineSeparator = "\u{E000}"
+
 enum LyricsSource: String, Codable {
     case youtube = "YouTube"
     case genius = "Genius"
@@ -38,16 +40,6 @@ struct LyricsTranslationPayload: Codable, Equatable {
     let romanizations: [String]
 }
 
-private struct LyricsTranslationDecodedPayload: Codable, Equatable {
-    let translations: [String]
-    let romanizations: [String?]
-}
-
-private struct LyricsTranslationResponse: Decodable {
-    let result: String?
-    let log: String
-}
-
 enum LyricsTranslationResult {
     case loaded(LyricsTranslationPayload)
     case failed(log: String?)
@@ -59,7 +51,7 @@ final class LyricsCache {
 
     private static let directoryName = "LyricsCache"
     private let lyricsCachePrefix = ["lyrics"]
-    private let translationCachePrefix = ["lyricsTranslation"]
+    private let translationCachePrefix = ["lyricsTranslationWebView"]
 
     static func cacheDirectoryPath() -> String? {
         shared.directoryURL?.path
@@ -234,6 +226,7 @@ result = get_lyrics_from_youtube('\(escaped)')
         fetchFromYouTube(youtubeVideoId: youtubeVideoId)
     }
 
+    @MainActor
     func translateLyrics(
         originalUrl: String,
         payload: LyricsPayload,
@@ -246,6 +239,7 @@ result = get_lyrics_from_youtube('\(escaped)')
         translateLyrics(youtubeVideoId: youtubeVideoId, payload: payload, completion: completion)
     }
 
+    @MainActor
     func translateLyrics(
         youtubeVideoId: String,
         payload: LyricsPayload,
@@ -266,56 +260,37 @@ result = get_lyrics_from_youtube('\(escaped)')
             }
         }
 
-        let texts = payload.lines.map { $0.text }
-        guard let data = try? JSONSerialization.data(withJSONObject: texts, options: []),
-              let jsonString = String(data: data, encoding: .utf8) else {
-            completion(.failed(log: nil))
-            return
-        }
-
-        let escaped = escapeForPythonString(jsonString)
-        let code = """
-import json
-from arbor import capture_logs, translate
-payload = json.loads('\(escaped)')
-result, log = capture_logs(translate, payload)
-result = json.dumps({"result": result, "log": log})
-"""
-
-        pythonExecAndGetStringAsync(
-            code.trimmingCharacters(in: .whitespacesAndNewlines),
-            "result"
-        ) { result in
-            guard let output = result, !output.isEmpty else {
-                completion(.failed(log: nil))
+        let sourceLines = payload.lines.map { $0.text }
+        let sourceText = sourceLines.joined(
+            separator: "\n\(googleTranslateLineSeparator)\n"
+        )
+        GoogleTranslateService.shared.translate(sourceText) { result in
+            guard case .loaded(let translation, let romanization) = result else {
+                if case .failed(let log) = result {
+                    completion(.failed(log: log))
+                }
                 return
             }
 
-            guard let data = output.data(using: .utf8),
-                  let response = try? JSONDecoder().decode(LyricsTranslationResponse.self, from: data) else {
-                completion(.failed(log: output))
+            let translatedLines = self.lines(in: translation)
+            guard translatedLines.count == sourceLines.count else {
+                completion(.failed(log: "Google Translate returned a different number of lyric lines."))
                 return
             }
 
-            guard let resultJSON = response.result, !resultJSON.isEmpty else {
-                completion(.failed(log: response.log))
-                return
-            }
-
-            guard let resultData = resultJSON.data(using: .utf8),
-                  let parsed = try? JSONDecoder().decode(LyricsTranslationDecodedPayload.self, from: resultData),
-                  parsed.romanizations.count == texts.count,
-                  parsed.translations.count == texts.count else {
-                completion(.failed(log: response.log))
-                return
-            }
-
-            let romanizedLines = parsed.romanizations.enumerated().map { index, value in
-                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                return trimmed.isEmpty ? texts[index] : trimmed
+            let extractedRomanizations = romanization.map { self.lines(in: $0) }
+            let romanizedLines: [String]
+            if let extractedRomanizations,
+               extractedRomanizations.count == sourceLines.count {
+                romanizedLines = extractedRomanizations.enumerated().map { index, value in
+                    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return trimmed.isEmpty ? sourceLines[index] : trimmed
+                }
+            } else {
+                romanizedLines = sourceLines
             }
             let sanitizedPayload = LyricsTranslationPayload(
-                translations: parsed.translations,
+                translations: translatedLines,
                 romanizations: romanizedLines
             )
             if let encoded = try? JSONEncoder().encode(sanitizedPayload) {
@@ -422,7 +397,7 @@ result = json.dumps({"result": result, "log": log})
 
     private func translationFileURL(for youtubeVideoId: String) -> URL? {
         guard let dirURL = ensureDirectory() else { return nil }
-        let filename = sanitizedFileName(youtubeVideoId) + ".translations"
+        let filename = sanitizedFileName(youtubeVideoId) + ".webview-translations"
         return dirURL.appendingPathComponent(filename).appendingPathExtension("json")
     }
 
@@ -450,6 +425,20 @@ result = json.dumps({"result": result, "log": log})
             }
         }
         return result.isEmpty ? "lyrics" : result
+    }
+
+    private func lines(in text: String) -> [String] {
+        if text.contains(googleTranslateLineSeparator) {
+            return text
+                .components(separatedBy: googleTranslateLineSeparator)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        }
+
+        return text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .trimmingCharacters(in: .newlines)
+            .components(separatedBy: "\n")
     }
 
     private func escapeForPythonString(_ value: String) -> String {

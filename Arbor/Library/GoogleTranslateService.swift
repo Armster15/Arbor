@@ -1,0 +1,216 @@
+import Combine
+import Foundation
+import WebKit
+
+private let googleTranslateRomanizationSelector = #"[jsname="toZopb"]"#
+private let googleTranslateTranslationSelector = #"[jsname="W297wb"]"#
+
+enum GoogleTranslateResult {
+    case loaded(translation: String, romanization: String?)
+    case failed(String)
+}
+
+@MainActor
+final class GoogleTranslateService: ObservableObject {
+    static let shared = GoogleTranslateService()
+
+    @Published private(set) var webView: WKWebView?
+    private var activeRequest: GoogleTranslateRequest?
+
+    private init() {}
+
+    func translate(
+        _ text: String,
+        completion: @escaping (GoogleTranslateResult) -> Void
+    ) {
+        activeRequest?.cancel()
+
+        let request = GoogleTranslateRequest(text: text, completion: completion)
+        request.onFinish = { [weak self, weak request] in
+            guard self?.activeRequest === request else { return }
+            self?.activeRequest = nil
+        }
+        activeRequest = request
+        webView = request.webView
+        request.start()
+    }
+
+    func cancel() {
+        activeRequest?.cancel()
+        webView = nil
+    }
+
+    func dismissWebView() {
+        webView = nil
+    }
+}
+
+@MainActor
+private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+    private static let messageHandlerName = "translation"
+    private static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
+
+    private let text: String
+    private var completion: ((GoogleTranslateResult) -> Void)?
+    private var timeoutTimer: Timer?
+    private(set) var webView: WKWebView!
+
+    var onFinish: (() -> Void)?
+
+    init(text: String, completion: @escaping (GoogleTranslateResult) -> Void) {
+        self.text = text
+        self.completion = completion
+        super.init()
+
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController.addUserScript(
+            WKUserScript(
+                source: Self.extractionScript,
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true
+            )
+        )
+        configuration.userContentController.add(
+            self,
+            name: Self.messageHandlerName
+        )
+
+        webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.customUserAgent = Self.userAgent
+        webView.isInspectable = true
+        webView.navigationDelegate = self
+    }
+
+    func start() {
+        guard let url = translationURL else {
+            finish(.failed("Could not create the Google Translate URL."))
+            return
+        }
+
+        timeoutTimer = Timer.scheduledTimer(withTimeInterval: 45, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                self?.finish(.failed("Google Translate timed out."))
+            }
+        }
+        webView.load(URLRequest(url: url))
+    }
+
+    func cancel() {
+        finish(.failed("Translation was cancelled."))
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        didFail navigation: WKNavigation!,
+        withError error: any Error
+    ) {
+        finish(.failed(error.localizedDescription))
+    }
+
+    func webView(
+        _ webView: WKWebView,
+        didFailProvisionalNavigation navigation: WKNavigation!,
+        withError error: any Error
+    ) {
+        finish(.failed(error.localizedDescription))
+    }
+
+    func userContentController(
+        _ userContentController: WKUserContentController,
+        didReceive message: WKScriptMessage
+    ) {
+        guard message.name == Self.messageHandlerName,
+              let json = message.body as? String else {
+            finish(.failed("Google Translate returned an invalid response."))
+            return
+        }
+
+        debugPrint("GoogleTranslateService: received payload", json)
+
+        guard let data = json.data(using: .utf8),
+              let payload = try? JSONDecoder().decode(WebTranslationPayload.self, from: data) else {
+            finish(.failed("Google Translate returned an invalid response."))
+            return
+        }
+
+        if let error = payload.error {
+            finish(.failed(error))
+        } else if let translation = payload.translation {
+            finish(.loaded(translation: translation, romanization: payload.romanization))
+        } else {
+            finish(.failed("Google Translate returned no translation."))
+        }
+    }
+
+    private var translationURL: URL? {
+        let unreserved = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.!~*'()"))
+        guard let encodedText = text.addingPercentEncoding(withAllowedCharacters: unreserved) else {
+            return nil
+        }
+        return URL(
+            string: "https://translate.google.com/?sl=auto&tl=en&text=\(encodedText)&op=translate"
+        )
+    }
+
+    private func finish(_ result: GoogleTranslateResult) {
+        guard let completion else { return }
+        self.completion = nil
+
+        timeoutTimer?.invalidate()
+        webView.stopLoading()
+        webView.navigationDelegate = nil
+        webView.configuration.userContentController.removeScriptMessageHandler(
+            forName: Self.messageHandlerName
+        )
+
+        completion(result)
+        onFinish?()
+        onFinish = nil
+    }
+
+    private static let extractionScript = """
+(() => {
+    function extractText(selector) {
+        const element = document.querySelector(selector)
+        return element?.innerText || null
+    }
+
+    let romanizationSelector = '\(googleTranslateRomanizationSelector)'
+    let translationSelector = '\(googleTranslateTranslationSelector)'
+    var previousPayload = null
+    var stablePolls = 0
+    var polls = 0
+
+    const timer = setInterval(() => {
+        const payload = {
+            romanization: extractText(romanizationSelector),
+            translation: extractText(translationSelector)
+        }
+        const serialized = JSON.stringify(payload)
+
+        if (payload.translation && serialized === previousPayload) {
+            stablePolls += 1
+        } else {
+            stablePolls = 0
+            previousPayload = serialized
+        }
+
+        if (stablePolls >= 4) {
+            clearInterval(timer)
+            window.webkit.messageHandlers.translation.postMessage(serialized)
+        } else if (++polls >= 120) {
+            clearInterval(timer)
+            window.webkit.messageHandlers.translation.postMessage(JSON.stringify({
+                error: 'Google Translate did not render a translation.'
+            }))
+        }
+    }, 250)
+})()
+"""
+}
+
+private struct WebTranslationPayload: Decodable {
+    let translation: String?
+    let romanization: String?
+    let error: String?
+}
