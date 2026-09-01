@@ -2,12 +2,15 @@ import Combine
 import Foundation
 import WebKit
 
-private let googleTranslateRomanizationSelector = #"[jsname="toZopb"]"#
-private let googleTranslateTranslationSelector = #"[jsname="W297wb"]"#
-private let googleTranslateUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
-private let googleTranslatePageLoadTimeout: TimeInterval = 60
-private let googleTranslateResultTimeout: TimeInterval = 30
-private let googleTranslatePollInterval: TimeInterval = 0.25
+private let romanizationSelector = #"[jsname="toZopb"]"#
+private let translationSelector = #"[jsname="W297wb"]"#
+
+// https://webkit.org/blog/17333/webkit-features-in-safari-26-0/
+private let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1"
+
+private let pageLoadTimeout: TimeInterval = 60
+private let resultTimeout: TimeInterval = 30
+private let pollInterval: TimeInterval = 0.25
 
 enum GoogleTranslateResult {
     case loaded(translation: String?, romanization: String?)
@@ -75,7 +78,7 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
         )
 
         webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.customUserAgent = googleTranslateUserAgent
+        webView.customUserAgent = userAgent
         webView.isInspectable = true
         webView.navigationDelegate = self
     }
@@ -87,7 +90,7 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
         }
 
         startTimeout(
-            after: googleTranslatePageLoadTimeout,
+            after: pageLoadTimeout,
             result: .failed("Google Translate page load timed out.")
         )
         webView.load(URLRequest(url: url))
@@ -102,7 +105,7 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
         didFinish navigation: WKNavigation!
     ) {
         startTimeout(
-            after: googleTranslateResultTimeout + googleTranslatePollInterval,
+            after: resultTimeout + pollInterval,
             result: .failed("Google Translate result timed out.")
         )
     }
@@ -198,13 +201,13 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
         return element?.innerText || null
     }
 
-    let romanizationSelector = '\(googleTranslateRomanizationSelector)'
-    let translationSelector = '\(googleTranslateTranslationSelector)'
+    let romanizationSelector = '\(romanizationSelector)'
+    let translationSelector = '\(translationSelector)'
     var previousPayload = null
     var stablePolls = 0
     var translationPolls = 0
     const startedAt = Date.now()
-    const resultTimeout = \(googleTranslateResultTimeout * 1_000)
+    const resultTimeout = \(resultTimeout * 1_000)
 
     const timer = setInterval(() => {
         const payload = {
@@ -234,7 +237,7 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
             clearInterval(timer)
             window.webkit.messageHandlers.translation.postMessage(serialized)
         }
-    }, \(googleTranslatePollInterval * 1_000))
+    }, \(pollInterval * 1_000))
 })()
 """
 }
