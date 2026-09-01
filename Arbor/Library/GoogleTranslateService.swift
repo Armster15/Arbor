@@ -227,19 +227,19 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
     private static let extractionScript = """
 (() => {
     function extractText(selector) {
-        const element = document.querySelector(selector)
-        return element?.innerText || null
+        return document.querySelector(selector)?.innerText || null
     }
 
     const romanizationSelector = '\(romanizationSelector)'
     const translationSelector = '\(translationSelector)'
-    var previousPayload = null
-    var payloadChangedAt = Date.now()
-    var translationStartedAt = null
-    const startedAt = Date.now()
     const resultTimeout = \(resultTimeout * 1_000)
     const payloadStableInterval = \(payloadStableInterval * 1_000)
     const romanizationWaitTimeout = \(romanizationWaitTimeout * 1_000)
+    const startedAt = Date.now()
+
+    let previousPayloadJSON = null
+    let payloadChangedAt = startedAt
+    let translationStartedAt = null
 
     const timer = setInterval(() => {
         const now = Date.now()
@@ -247,29 +247,31 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
             romanization: extractText(romanizationSelector),
             translation: extractText(translationSelector)
         }
-        const serialized = JSON.stringify(payload)
+        const payloadJSON = JSON.stringify(payload)
 
-        if (payload.translation && translationStartedAt === null) {
+        if (payload.translation !== null && translationStartedAt === null) {
             translationStartedAt = now
         }
 
-        if (serialized !== previousPayload) {
-            previousPayload = serialized
+        if (payloadJSON !== previousPayloadJSON) {
+            previousPayloadJSON = payloadJSON
             payloadChangedAt = now
         }
 
-        const payloadIsStable = payload.translation
+        const translationIsStable = payload.translation !== null
             && now - payloadChangedAt >= payloadStableInterval
-        const romanizationWaitExpired = translationStartedAt !== null
-            && now - translationStartedAt >= romanizationWaitTimeout
-        const resultIsReady = payloadIsStable
-            && (payload.romanization || romanizationWaitExpired)
+        const romanizationIsReady = payload.romanization !== null
+            || (translationStartedAt !== null
+                && now - translationStartedAt >= romanizationWaitTimeout)
+        const resultIsReady = translationIsStable && romanizationIsReady
         const resultTimedOut = now - startedAt >= resultTimeout
 
-        if (resultIsReady || resultTimedOut) {
-            clearInterval(timer)
-            window.webkit.messageHandlers.translation.postMessage(serialized)
+        if (!resultIsReady && !resultTimedOut) {
+            return
         }
+
+        clearInterval(timer)
+        window.webkit.messageHandlers.translation.postMessage(payloadJSON)
     }, \(pollInterval * 1_000))
 })()
 """
