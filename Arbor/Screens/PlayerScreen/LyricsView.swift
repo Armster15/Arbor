@@ -386,7 +386,11 @@ private struct LyricsLinesView: View {
                 proxy.scrollTo(activeIndex, anchor: .center)
             }
         } else {
-            proxy.scrollTo(activeIndex, anchor: .center)
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                proxy.scrollTo(activeIndex, anchor: .center)
+            }
         }
     }
 
@@ -398,7 +402,11 @@ private struct LyricsLinesView: View {
                 proxy.scrollTo(0, anchor: .top)
             }
         } else {
-            proxy.scrollTo(0, anchor: .top)
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                proxy.scrollTo(0, anchor: .top)
+            }
         }
     }
 
@@ -492,10 +500,13 @@ private struct LyricsLinesView: View {
                             for: payload,
                             currentTimeMs: newMs
                         )
-                        if let jumpedIndex {
-                            lastActiveLyricIndex = jumpedIndex
+                        if jumpedIndex != lastActiveLyricIndex {
+                            scrollToActiveLyric(
+                                proxy,
+                                activeIndex: jumpedIndex,
+                                shouldAnimate: newMs > lastMs
+                            )
                         }
-                        scrollToActiveLyric(proxy, activeIndex: jumpedIndex, shouldAnimate: false)
                     }
                     if newMs < lastMs && newMs < 500 {
                         lastActiveLyricIndex = 0
@@ -506,21 +517,15 @@ private struct LyricsLinesView: View {
             }
             .onChange(of: lyricsDisplayMode) { _, _ in
                 guard payload.timed, isAutoScrollEnabled else { return }
-                DispatchQueue.main.async {
-                    scrollToActiveLyric(proxy, activeIndex: activeIndex, shouldAnimate: false)
-                }
+                scrollToActiveLyric(proxy, activeIndex: activeIndex, shouldAnimate: false)
             }
             .onChange(of: romanizedLyricLines) { _, _ in
                 guard payload.timed, isAutoScrollEnabled else { return }
-                DispatchQueue.main.async {
-                    scrollToActiveLyric(proxy, activeIndex: activeIndex, shouldAnimate: false)
-                }
+                scrollToActiveLyric(proxy, activeIndex: activeIndex, shouldAnimate: false)
             }
             .onChange(of: translatedLyricLines) { _, _ in
                 guard payload.timed, isAutoScrollEnabled else { return }
-                DispatchQueue.main.async {
-                    scrollToActiveLyric(proxy, activeIndex: activeIndex, shouldAnimate: false)
-                }
+                scrollToActiveLyric(proxy, activeIndex: activeIndex, shouldAnimate: false)
             }
             // scroll to the active lyric on appear (e.g. when player is reopened)
             .onAppear {
