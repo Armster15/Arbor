@@ -11,9 +11,33 @@ private let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) 
 private let pageLoadTimeout: TimeInterval = 60
 private let resultTimeout: TimeInterval = 30
 private let pollInterval: TimeInterval = 0.25
+private let payloadStableInterval: TimeInterval = 1
+private let romanizationWaitTimeout: TimeInterval = 5
+
+private enum TranslationLines {
+    private static let separator = "\u{E000}"
+
+    static func encode(_ lines: [String]) -> String {
+        lines.joined(separator: "\n\(separator)\n")
+    }
+
+    static func decode(_ text: String) -> [String] {
+        if text.contains(separator) {
+            return text
+                .components(separatedBy: separator)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        }
+
+        return text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .trimmingCharacters(in: .newlines)
+            .components(separatedBy: "\n")
+    }
+}
 
 enum GoogleTranslateResult {
-    case loaded(translation: String?, romanization: String?)
+    case loaded(translations: [String]?, romanizations: [String]?)
     case failed(String)
 }
 
@@ -30,12 +54,12 @@ final class GoogleTranslateService: ObservableObject {
     private init() {}
 
     func translate(
-        _ text: String,
+        _ lines: [String],
         completion: @escaping (GoogleTranslateResult) -> Void
     ) {
         activeRequest?.cancel()
 
-        let request = GoogleTranslateRequest(text: text, completion: completion)
+        let request = GoogleTranslateRequest(lines: lines, completion: completion)
         request.onFinish = { [weak self, weak request] in
             guard self?.activeRequest === request else { return }
             self?.activeRequest = nil
@@ -53,15 +77,15 @@ final class GoogleTranslateService: ObservableObject {
 private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
     private static let messageHandlerName = "translation"
 
-    private let text: String
+    private let sourceLines: [String]
     private var completion: ((GoogleTranslateResult) -> Void)?
     private var stageTimeoutTimer: Timer?
     private(set) var webView: WKWebView!
 
     var onFinish: (() -> Void)?
 
-    init(text: String, completion: @escaping (GoogleTranslateResult) -> Void) {
-        self.text = text
+    init(lines: [String], completion: @escaping (GoogleTranslateResult) -> Void) {
+        sourceLines = lines
         self.completion = completion
         super.init()
 
@@ -80,7 +104,6 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
 
         webView = WKWebView(frame: .zero, configuration: configuration)
         webView.customUserAgent = userAgent
-        webView.isInspectable = true
         webView.navigationDelegate = self
     }
 
@@ -145,20 +168,25 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
             return
         }
 
-        if let error = payload.error {
-            finish(.failed(error))
-        } else {
-            finish(
-                .loaded(
-                    translation: payload.translation,
-                    romanization: payload.romanization
-                )
-            )
+        let translations = payload.translation.map(TranslationLines.decode)
+        if let translations, translations.count != sourceLines.count {
+            finish(.failed("Google Translate returned a different number of translated lyric lines."))
+            return
         }
+
+        let romanizations = payload.romanization.map(TranslationLines.decode)
+        if let romanizations, romanizations.count != sourceLines.count {
+            finish(.failed("Google Translate returned a different number of romanized lyric lines."))
+            return
+        }
+
+        finish(.loaded(translations: translations, romanizations: romanizations))
     }
 
     private var translationURL: URL? {
+        // Intentionally avoid URLComponents to preserve how Google Translate writes this URL in a browser.
         let unreserved = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.!~*'()"))
+        let text = TranslationLines.encode(sourceLines)
         guard let encodedText = text.addingPercentEncoding(withAllowedCharacters: unreserved) else {
             return nil
         }
@@ -202,39 +230,42 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
         return element?.innerText || null
     }
 
-    let romanizationSelector = '\(romanizationSelector)'
-    let translationSelector = '\(translationSelector)'
+    const romanizationSelector = '\(romanizationSelector)'
+    const translationSelector = '\(translationSelector)'
     var previousPayload = null
-    var stablePolls = 0
-    var translationPolls = 0
+    var payloadChangedAt = Date.now()
+    var translationStartedAt = null
     const startedAt = Date.now()
     const resultTimeout = \(resultTimeout * 1_000)
+    const payloadStableInterval = \(payloadStableInterval * 1_000)
+    const romanizationWaitTimeout = \(romanizationWaitTimeout * 1_000)
 
     const timer = setInterval(() => {
+        const now = Date.now()
         const payload = {
             romanization: extractText(romanizationSelector),
             translation: extractText(translationSelector)
         }
         const serialized = JSON.stringify(payload)
 
-        if (payload.translation) {
-            translationPolls += 1
+        if (payload.translation && translationStartedAt === null) {
+            translationStartedAt = now
         }
 
-        if (payload.translation && serialized === previousPayload) {
-            stablePolls += 1
-        } else {
-            stablePolls = 0
+        if (serialized !== previousPayload) {
             previousPayload = serialized
+            payloadChangedAt = now
         }
 
-        const romanizationReady = payload.romanization && stablePolls >= 4
-        const romanizationWaitExpired = translationPolls >= 20 && stablePolls >= 4
+        const payloadIsStable = payload.translation
+            && now - payloadChangedAt >= payloadStableInterval
+        const romanizationWaitExpired = translationStartedAt !== null
+            && now - translationStartedAt >= romanizationWaitTimeout
+        const resultIsReady = payloadIsStable
+            && (payload.romanization || romanizationWaitExpired)
+        const resultTimedOut = now - startedAt >= resultTimeout
 
-        if (romanizationReady || romanizationWaitExpired) {
-            clearInterval(timer)
-            window.webkit.messageHandlers.translation.postMessage(serialized)
-        } else if (Date.now() - startedAt >= resultTimeout) {
+        if (resultIsReady || resultTimedOut) {
             clearInterval(timer)
             window.webkit.messageHandlers.translation.postMessage(serialized)
         }
@@ -246,5 +277,4 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
 private struct WebTranslationPayload: Decodable {
     let translation: String?
     let romanization: String?
-    let error: String?
 }

@@ -1,7 +1,6 @@
 import Foundation
 
-private let googleTranslateLineSeparator = "\u{E000}"
-private let missingTranslationText = "null"
+private let missingTranslationLine = "null"
 
 enum LyricsSource: String, Codable {
     case youtube = "YouTube"
@@ -262,59 +261,31 @@ result = get_lyrics_from_youtube('\(escaped)')
         }
 
         let sourceLines = payload.lines.map { $0.text }
-        let sourceText = sourceLines.joined(
-            separator: "\n\(googleTranslateLineSeparator)\n"
-        )
-        GoogleTranslateService.shared.translate(sourceText) { result in
-            guard case .loaded(let translation, let romanization) = result else {
-                if case .failed(let log) = result {
-                    completion(.failed(log: log))
-                }
-                return
-            }
-
-            let extractedTranslations = translation.map { self.lines(in: $0) }
-            if let extractedTranslations,
-               extractedTranslations.count != sourceLines.count {
-                completion(
-                    .failed(log: "Google Translate returned a different number of translated lyric lines.")
+        GoogleTranslateService.shared.translate(sourceLines) { result in
+            switch result {
+            case .failed(let log):
+                completion(.failed(log: log))
+            case .loaded(let translations, let romanizations):
+                let missingLines = Array(
+                    repeating: missingTranslationLine,
+                    count: sourceLines.count
                 )
-                return
-            }
-
-            let extractedRomanizations = romanization.map { self.lines(in: $0) }
-            if let extractedRomanizations,
-               extractedRomanizations.count != sourceLines.count {
-                completion(
-                    .failed(log: "Google Translate returned a different number of romanized lyric lines.")
-                )
-                return
-            }
-
-            let missingLines = Array(
-                repeating: missingTranslationText,
-                count: sourceLines.count
-            )
-            let romanizedLines: [String]
-            if let extractedRomanizations {
-                romanizedLines = extractedRomanizations.map { value in
+                let romanizedLines = (romanizations ?? missingLines).map { value in
                     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                    return trimmed.isEmpty ? missingTranslationText : trimmed
+                    return trimmed.isEmpty ? missingTranslationLine : trimmed
                 }
-            } else {
-                romanizedLines = missingLines
+                let translationPayload = LyricsTranslationPayload(
+                    translations: translations ?? missingLines,
+                    romanizations: romanizedLines
+                )
+                if translations != nil, romanizations != nil {
+                    if let encoded = try? JSONEncoder().encode(translationPayload) {
+                        self.saveTranslationToDisk(data: encoded, youtubeVideoId: youtubeVideoId)
+                    }
+                    self.setTranslationInMemory(translationPayload, youtubeVideoId: youtubeVideoId)
+                }
+                completion(.loaded(translationPayload))
             }
-            let sanitizedPayload = LyricsTranslationPayload(
-                translations: extractedTranslations ?? missingLines,
-                romanizations: romanizedLines
-            )
-            if translation != nil,
-               romanization != nil,
-               let encoded = try? JSONEncoder().encode(sanitizedPayload) {
-                self.saveTranslationToDisk(data: encoded, youtubeVideoId: youtubeVideoId)
-                self.setTranslationInMemory(sanitizedPayload, youtubeVideoId: youtubeVideoId)
-            }
-            completion(.loaded(sanitizedPayload))
         }
     }
 
@@ -442,20 +413,6 @@ result = get_lyrics_from_youtube('\(escaped)')
             }
         }
         return result.isEmpty ? "lyrics" : result
-    }
-
-    private func lines(in text: String) -> [String] {
-        if text.contains(googleTranslateLineSeparator) {
-            return text
-                .components(separatedBy: googleTranslateLineSeparator)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        }
-
-        return text
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-            .trimmingCharacters(in: .newlines)
-            .components(separatedBy: "\n")
     }
 
     private func escapeForPythonString(_ value: String) -> String {

@@ -209,7 +209,7 @@ struct LyricsPresentationView: View {
     }
 
     private func resetTranslation() {
-        GoogleTranslateService.shared.cancel()
+        googleTranslateService.cancel()
         translationState = .idle
         lyricsDisplayMode = .original
         isFullScreenPresented = false
@@ -218,7 +218,7 @@ struct LyricsPresentationView: View {
     private func resetTranslationForReentry() {
         guard !isFullScreenPresented else { return }
 
-        GoogleTranslateService.shared.cancel()
+        googleTranslateService.cancel()
         translationState = .idle
     }
 
@@ -236,15 +236,13 @@ struct LyricsPresentationView: View {
         )
         .background(alignment: .topLeading) {
             if let webView = googleTranslateService.activeWebView {
-                ZStack(alignment: .topLeading) {
-                    ActiveTranslationWebView(webView: webView)
-                        .frame(width: 390, height: 844)
-                }
-                .frame(width: 1, height: 1)
-                .opacity(0.01)
-                .clipped()
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+                ActiveTranslationWebView(webView: webView)
+                    .frame(width: 390, height: 844)
+                    .frame(width: 1, height: 1, alignment: .topLeading)
+                    .opacity(0.01)
+                    .clipped()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
         }
         .onAppear {
