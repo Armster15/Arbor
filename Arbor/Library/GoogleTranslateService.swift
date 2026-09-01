@@ -21,8 +21,11 @@ enum GoogleTranslateResult {
 final class GoogleTranslateService: ObservableObject {
     static let shared = GoogleTranslateService()
 
-    @Published private(set) var activeWebView: WKWebView?
-    private var activeRequest: GoogleTranslateRequest?
+    @Published private var activeRequest: GoogleTranslateRequest?
+
+    var activeWebView: WKWebView? {
+        activeRequest?.webView
+    }
 
     private init() {}
 
@@ -36,10 +39,8 @@ final class GoogleTranslateService: ObservableObject {
         request.onFinish = { [weak self, weak request] in
             guard self?.activeRequest === request else { return }
             self?.activeRequest = nil
-            self?.activeWebView = nil
         }
         activeRequest = request
-        activeWebView = request.webView
         request.start()
     }
 
