@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UIKit
+import WebKit
 
 public enum LyricsDisplayMode: String, CaseIterable {
     case original = "Original"
@@ -18,6 +19,7 @@ enum LyricsTranslationState {
     case idle
     case loading(LyricsTranslationRequest)
     case loaded(request: LyricsTranslationRequest, payload: LyricsTranslationPayload)
+    case failed(log: String?)
 
     func payload(for source: LyricsPayload) -> LyricsTranslationPayload? {
         guard case .loaded(let request, let payload) = self,
@@ -37,6 +39,16 @@ enum LyricsTranslationState {
 
     var taskId: UUID? {
         request?.id
+    }
+
+    var failureLog: String? {
+        guard case .failed(let log) = self else { return nil }
+        return log
+    }
+
+    var hasFailed: Bool {
+        guard case .failed = self else { return false }
+        return true
     }
 }
 
@@ -98,15 +110,26 @@ public struct LyricsView: View {
 }
 
 private struct TranslationFailureAlertModifier: ViewModifier {
-    @Binding var isPresented: Bool
-    @Binding var logText: String?
+    @Binding var translationState: LyricsTranslationState
+    let isEnabled: Bool
 
     @State private var showLogSheet = false
 
+    private var isPresented: Binding<Bool> {
+        Binding(
+            get: { isEnabled && translationState.hasFailed },
+            set: { isPresented in
+                if isEnabled && !isPresented && !showLogSheet {
+                    translationState = .idle
+                }
+            }
+        )
+    }
+
     func body(content: Content) -> some View {
         content
-            .alert("Translation Failed", isPresented: $isPresented) {
-                if logText?.isEmpty == false {
+            .alert("Translation Failed", isPresented: isPresented) {
+                if translationState.failureLog?.isEmpty == false {
                     Button("View Logs") {
                         showLogSheet = true
                     }
@@ -115,11 +138,14 @@ private struct TranslationFailureAlertModifier: ViewModifier {
             } message: {
                 Text("Failed to translate lyrics. Please try again.")
             }
-            .sheet(isPresented: $showLogSheet) {
+            .sheet(
+                isPresented: $showLogSheet,
+                onDismiss: { translationState = .idle }
+            ) {
                 NavigationStack {
                     LogViewer(
                         title: "View Logs",
-                        logText: logText,
+                        logText: translationState.failureLog,
                         showClose: true
                     )
                 }
@@ -129,13 +155,13 @@ private struct TranslationFailureAlertModifier: ViewModifier {
 
 private extension View {
     func translationFailureAlert(
-        isPresented: Binding<Bool>,
-        logText: Binding<String?>
+        _ translationState: Binding<LyricsTranslationState>,
+        isEnabled: Bool = true
     ) -> some View {
         modifier(
             TranslationFailureAlertModifier(
-                isPresented: isPresented,
-                logText: logText
+                translationState: translationState,
+                isEnabled: isEnabled
             )
         )
     }
@@ -151,20 +177,7 @@ struct LyricsPresentationView: View {
 
     @State private var translationState = LyricsTranslationState.idle
     @State private var isFullScreenPresented = false
-    @State private var showTranslationErrorAlert = false
-    @State private var translationLogText: String?
-
-    private var compactFailureAlertBinding: Binding<Bool> {
-        Binding(
-            get: {
-                !isFullScreenPresented && showTranslationErrorAlert
-            },
-            set: { isPresented in
-                guard !isFullScreenPresented else { return }
-                showTranslationErrorAlert = isPresented
-            }
-        )
-    }
+    @ObservedObject private var googleTranslateService = GoogleTranslateService.shared
 
     private func selectMode(_ mode: LyricsDisplayMode) {
         lyricsDisplayMode = mode
@@ -174,9 +187,6 @@ struct LyricsPresentationView: View {
     private func translateIfNeeded(for mode: LyricsDisplayMode) {
         guard mode != .original else { return }
         guard case .idle = translationState else { return }
-
-        showTranslationErrorAlert = false
-        translationLogText = nil
 
         translationState = .loading(
             LyricsTranslationRequest(
@@ -199,11 +209,17 @@ struct LyricsPresentationView: View {
     }
 
     private func resetTranslation() {
+        googleTranslateService.cancel()
         translationState = .idle
         lyricsDisplayMode = .original
         isFullScreenPresented = false
-        showTranslationErrorAlert = false
-        translationLogText = nil
+    }
+
+    private func resetTranslationForReentry() {
+        guard !isFullScreenPresented else { return }
+
+        googleTranslateService.cancel()
+        translationState = .idle
     }
 
     var body: some View {
@@ -218,11 +234,25 @@ struct LyricsPresentationView: View {
             onSelectMode: selectMode,
             onExpand: { isFullScreenPresented = true }
         )
+        .background(alignment: .topLeading) {
+            if let webView = googleTranslateService.activeWebView {
+                ActiveTranslationWebView(webView: webView)
+                    .frame(width: 390, height: 844)
+                    .frame(width: 1, height: 1, alignment: .topLeading)
+                    .opacity(0.01)
+                    .clipped()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
         .onAppear {
             translateIfNeeded(for: lyricsDisplayMode)
         }
         .onChange(of: payload) { _, _ in
             resetTranslation()
+        }
+        .onDisappear {
+            resetTranslationForReentry()
         }
         .task(id: translationState.taskId) { [request = translationState.request] in
             guard let request else { return }
@@ -234,15 +264,13 @@ struct LyricsPresentationView: View {
             case .loaded(let payload):
                 translationState = .loaded(request: request, payload: payload)
             case .failed(let log):
-                translationState = .idle
+                translationState = .failed(log: log)
                 lyricsDisplayMode = .original
-                translationLogText = log
-                showTranslationErrorAlert = true
             }
         }
         .translationFailureAlert(
-            isPresented: compactFailureAlertBinding,
-            logText: $translationLogText
+            $translationState,
+            isEnabled: !isFullScreenPresented
         )
         .fullScreenCover(isPresented: $isFullScreenPresented) {
             FullScreenLyricsView(
@@ -256,12 +284,19 @@ struct LyricsPresentationView: View {
                 lyricsDisplayMode: $lyricsDisplayMode,
                 onSelectMode: selectMode
             )
-            .translationFailureAlert(
-                isPresented: $showTranslationErrorAlert,
-                logText: $translationLogText
-            )
+            .translationFailureAlert($translationState)
         }
     }
+}
+
+private struct ActiveTranslationWebView: UIViewRepresentable {
+    let webView: WKWebView
+
+    func makeUIView(context: Context) -> WKWebView {
+        webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {}
 }
 
 // Minimal UIKit label wrapper to fix SwiftUI Text horizontal scrolling bug

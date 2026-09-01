@@ -38,16 +38,6 @@ struct LyricsTranslationPayload: Codable, Equatable {
     let romanizations: [String]
 }
 
-private struct LyricsTranslationDecodedPayload: Codable, Equatable {
-    let translations: [String]
-    let romanizations: [String?]
-}
-
-private struct LyricsTranslationResponse: Decodable {
-    let result: String?
-    let log: String
-}
-
 enum LyricsTranslationResult {
     case loaded(LyricsTranslationPayload)
     case failed(log: String?)
@@ -234,6 +224,7 @@ result = get_lyrics_from_youtube('\(escaped)')
         fetchFromYouTube(youtubeVideoId: youtubeVideoId)
     }
 
+    @MainActor
     func translateLyrics(
         originalUrl: String,
         payload: LyricsPayload,
@@ -246,6 +237,7 @@ result = get_lyrics_from_youtube('\(escaped)')
         translateLyrics(youtubeVideoId: youtubeVideoId, payload: payload, completion: completion)
     }
 
+    @MainActor
     func translateLyrics(
         youtubeVideoId: String,
         payload: LyricsPayload,
@@ -266,63 +258,28 @@ result = get_lyrics_from_youtube('\(escaped)')
             }
         }
 
-        let texts = payload.lines.map { $0.text }
-        guard let data = try? JSONSerialization.data(withJSONObject: texts, options: []),
-              let jsonString = String(data: data, encoding: .utf8) else {
-            completion(.failed(log: nil))
-            return
-        }
-
-        let escaped = escapeForPythonString(jsonString)
-        let code = """
-import json
-from arbor import capture_logs, translate
-payload = json.loads('\(escaped)')
-result, log = capture_logs(translate, payload)
-result = json.dumps({"result": result, "log": log})
-"""
-
-        pythonExecAndGetStringAsync(
-            code.trimmingCharacters(in: .whitespacesAndNewlines),
-            "result"
-        ) { result in
-            guard let output = result, !output.isEmpty else {
-                completion(.failed(log: nil))
-                return
+        let sourceLines = payload.lines.map { $0.text }
+        GoogleTranslateService.shared.translate(sourceLines) { result in
+            switch result {
+            case .failed(let log):
+                completion(.failed(log: log))
+            case .incomplete(let translations, let romanizations):
+                let translationPayload = LyricsTranslationPayload(
+                    translations: translations,
+                    romanizations: romanizations
+                )
+                completion(.loaded(translationPayload))
+            case .loaded(let translations, let romanizations):
+                let translationPayload = LyricsTranslationPayload(
+                    translations: translations,
+                    romanizations: romanizations
+                )
+                if let encoded = try? JSONEncoder().encode(translationPayload) {
+                    self.saveTranslationToDisk(data: encoded, youtubeVideoId: youtubeVideoId)
+                }
+                self.setTranslationInMemory(translationPayload, youtubeVideoId: youtubeVideoId)
+                completion(.loaded(translationPayload))
             }
-
-            guard let data = output.data(using: .utf8),
-                  let response = try? JSONDecoder().decode(LyricsTranslationResponse.self, from: data) else {
-                completion(.failed(log: output))
-                return
-            }
-
-            guard let resultJSON = response.result, !resultJSON.isEmpty else {
-                completion(.failed(log: response.log))
-                return
-            }
-
-            guard let resultData = resultJSON.data(using: .utf8),
-                  let parsed = try? JSONDecoder().decode(LyricsTranslationDecodedPayload.self, from: resultData),
-                  parsed.romanizations.count == texts.count,
-                  parsed.translations.count == texts.count else {
-                completion(.failed(log: response.log))
-                return
-            }
-
-            let romanizedLines = parsed.romanizations.enumerated().map { index, value in
-                let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                return trimmed.isEmpty ? texts[index] : trimmed
-            }
-            let sanitizedPayload = LyricsTranslationPayload(
-                translations: parsed.translations,
-                romanizations: romanizedLines
-            )
-            if let encoded = try? JSONEncoder().encode(sanitizedPayload) {
-                self.saveTranslationToDisk(data: encoded, youtubeVideoId: youtubeVideoId)
-            }
-            self.setTranslationInMemory(sanitizedPayload, youtubeVideoId: youtubeVideoId)
-            completion(.loaded(sanitizedPayload))
         }
     }
 
