@@ -1,7 +1,5 @@
 import Foundation
 
-private let missingTranslationLine = "null"
-
 enum LyricsSource: String, Codable {
     case youtube = "YouTube"
     case genius = "Genius"
@@ -265,25 +263,21 @@ result = get_lyrics_from_youtube('\(escaped)')
             switch result {
             case .failed(let log):
                 completion(.failed(log: log))
-            case .loaded(let translations, let romanizations):
-                let missingLines = Array(
-                    repeating: missingTranslationLine,
-                    count: sourceLines.count
-                )
-                let romanizedLines = (romanizations ?? missingLines).map { value in
-                    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-                    return trimmed.isEmpty ? missingTranslationLine : trimmed
-                }
+            case .incomplete(let translations, let romanizations):
                 let translationPayload = LyricsTranslationPayload(
-                    translations: translations ?? missingLines,
-                    romanizations: romanizedLines
+                    translations: translations,
+                    romanizations: romanizations
                 )
-                if translations != nil, romanizations != nil {
-                    if let encoded = try? JSONEncoder().encode(translationPayload) {
-                        self.saveTranslationToDisk(data: encoded, youtubeVideoId: youtubeVideoId)
-                    }
-                    self.setTranslationInMemory(translationPayload, youtubeVideoId: youtubeVideoId)
+                completion(.loaded(translationPayload))
+            case .loaded(let translations, let romanizations):
+                let translationPayload = LyricsTranslationPayload(
+                    translations: translations,
+                    romanizations: romanizations
+                )
+                if let encoded = try? JSONEncoder().encode(translationPayload) {
+                    self.saveTranslationToDisk(data: encoded, youtubeVideoId: youtubeVideoId)
                 }
+                self.setTranslationInMemory(translationPayload, youtubeVideoId: youtubeVideoId)
                 completion(.loaded(translationPayload))
             }
         }

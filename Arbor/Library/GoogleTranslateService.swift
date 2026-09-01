@@ -38,7 +38,8 @@ private enum TranslationLines {
 }
 
 enum GoogleTranslateResult {
-    case loaded(translations: [String]?, romanizations: [String]?)
+    case loaded(translations: [String], romanizations: [String])
+    case incomplete(translations: [String], romanizations: [String])
     case failed(String)
 }
 
@@ -181,7 +182,31 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
             return
         }
 
-        finish(.loaded(translations: translations, romanizations: romanizations))
+        let missingTranslation = "No translations found "
+            + "(translation=null, selector=\(translationSelector), "
+            + "resultTimeout=\(Int(resultTimeout))s, sourceLineCount=\(sourceLines.count))"
+        let missingRomanization = "No romanizations found "
+            + "(romanization=null, selector=\(romanizationSelector), "
+            + "romanizationWaitTimeout=\(Int(romanizationWaitTimeout))s, "
+            + "sourceLineCount=\(sourceLines.count))"
+
+        let translationLines = translations
+            ?? Array(repeating: missingTranslation, count: sourceLines.count)
+        let rawRomanizationLines = romanizations
+            ?? Array(repeating: missingRomanization, count: sourceLines.count)
+        let romanizationLines = rawRomanizationLines.enumerated().map { index, line in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.isEmpty else { return trimmed }
+            return "No romanization found "
+                + "(romanization=empty, selector=\(romanizationSelector), "
+                + "lineIndex=\(index), sourceLineCount=\(sourceLines.count))"
+        }
+
+        if translations == nil || romanizations == nil {
+            finish(.incomplete(translations: translationLines, romanizations: romanizationLines))
+        } else {
+            finish(.loaded(translations: translationLines, romanizations: romanizationLines))
+        }
     }
 
     private var translationURL: URL? {
