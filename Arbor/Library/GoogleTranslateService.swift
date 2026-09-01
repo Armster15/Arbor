@@ -15,6 +15,7 @@ private let payloadStableInterval: TimeInterval = 1
 private let romanizationWaitTimeout: TimeInterval = 5
 
 private enum TranslationLines {
+    // Private-use character that Google Translate preserves between lyric lines.
     private static let separator = "\u{E000}"
 
     static func encode(_ lines: [String]) -> String {
