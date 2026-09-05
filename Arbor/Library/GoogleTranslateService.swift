@@ -296,7 +296,8 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
     private static let extractionScript = """
 (() => {
     function extractText(selector) {
-        return document.querySelector(selector)?.innerText || null
+        return Array.from(document.querySelectorAll(selector), element => element.innerText)
+            .join(' ') || null
     }
 
     const romanizationSelector = '\(romanizationSelector)'
