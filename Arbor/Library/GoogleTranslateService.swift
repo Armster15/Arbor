@@ -171,14 +171,58 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
         }
 
         let translations = payload.translation.map(TranslationLines.decode)
-        if let translations, translations.count != sourceLines.count {
-            finish(.failed("Google Translate returned a different number of translated lyric lines."))
+        let romanizations = payload.romanization.map(TranslationLines.decode)
+        if let translations, let romanizations,
+           translations.count != sourceLines.count,
+           romanizations.count != sourceLines.count {
+            finish(.failed("""
+                Google Translate returned different numbers of translated and romanized lyric lines.
+                source: \(sourceLines.count), translated: \(translations.count), romanized: \(romanizations.count)
+
+                <SOURCE_LINES>
+                \(sourceLines.joined(separator: "\n"))
+                </SOURCE_LINES>
+
+                <TRANSLATED_LINES>
+                \(translations.joined(separator: "\n"))
+                </TRANSLATED_LINES>
+
+                <ROMANIZED_LINES>
+                \(romanizations.joined(separator: "\n"))
+                </ROMANIZED_LINES>
+                """))
             return
         }
 
-        let romanizations = payload.romanization.map(TranslationLines.decode)
+        if let translations, translations.count != sourceLines.count {
+            finish(.failed("""
+                Google Translate returned a different number of translated lyric lines.
+                source: \(sourceLines.count), translated: \(translations.count)
+
+                <SOURCE_LINES>
+                \(sourceLines.joined(separator: "\n"))
+                </SOURCE_LINES>
+
+                <TRANSLATED_LINES>
+                \(translations.joined(separator: "\n"))
+                </TRANSLATED_LINES>
+                """))
+            return
+        }
+
         if let romanizations, romanizations.count != sourceLines.count {
-            finish(.failed("Google Translate returned a different number of romanized lyric lines."))
+            finish(.failed("""
+                Google Translate returned a different number of romanized lyric lines.
+                source: \(sourceLines.count), romanized: \(romanizations.count)
+
+                <SOURCE_LINES>
+                \(sourceLines.joined(separator: "\n"))
+                </SOURCE_LINES>
+
+                <ROMANIZED_LINES>
+                \(romanizations.joined(separator: "\n"))
+                </ROMANIZED_LINES>
+                """))
             return
         }
 
