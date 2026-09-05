@@ -19,6 +19,7 @@ public let BackgroundColor = LinearGradient(
 )
 
 struct ContentView: View {
+    @Environment(\.modelContext) var modelContext
     @EnvironmentObject var player: PlayerCoordinator
     @EnvironmentObject var lastFM: LastFMSession
     
@@ -56,6 +57,9 @@ struct ContentView: View {
         .tint(Color("PrimaryBg"))
         .onAppear {
             player.attach(lastFM: lastFM)
+        }
+        .onOpenURL { url in
+            ShareImportStore.handleOpenURL(url, modelContext: modelContext, player: player)
         }
         .tabViewBottomAccessory {
             if player.canShowPlayer == true, let libraryItem = player.libraryItem {
