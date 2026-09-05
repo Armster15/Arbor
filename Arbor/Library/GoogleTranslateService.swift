@@ -22,11 +22,20 @@ private enum TranslationLines {
         lines.joined(separator: "\n\(separator)\n")
     }
 
-    static func decode(_ text: String) -> [String] {
+    static func decode(_ text: String, expectedLineCount: Int) -> [String] {
         if text.contains(separator) {
-            return text
+            let lines = text
                 .components(separatedBy: separator)
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard lines.count != expectedLineCount else { return lines }
+
+            // Google can omit separators while preserving the original line breaks.
+            let expandedLines = lines.flatMap {
+                $0.replacingOccurrences(of: "\r\n", with: "\n")
+                    .replacingOccurrences(of: "\r", with: "\n")
+                    .components(separatedBy: "\n")
+            }
+            return expandedLines.count == expectedLineCount ? expandedLines : lines
         }
 
         return text
@@ -170,8 +179,9 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
             return
         }
 
-        let translations = payload.translation.map(TranslationLines.decode)
-        let romanizations = payload.romanization.map(TranslationLines.decode)
+        let translations = payload.translation.map { TranslationLines.decode($0, expectedLineCount: sourceLines.count) }
+        let romanizations = payload.romanization.map { TranslationLines.decode($0, expectedLineCount: sourceLines.count) }
+
         if let translations, let romanizations,
            translations.count != sourceLines.count,
            romanizations.count != sourceLines.count {
