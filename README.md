@@ -9,7 +9,7 @@ Arbor's core app is built in Swift, but it uniquely ships an embedded version of
 It also features:
 - **iCloud Sync**, so you can share your library across your Apple devices.
 - **Last.fm support** for scrobbling your listens
-- **Lyrics**, including romanization and translation
+- **Lyrics**, including romanization and translation (powered by a webview extracting strings from Google Translate)
 - **A Python dependency manager** with `pip` so you can update dependencies without having to rebuild the app
 - **Privacy**: Arbor is a fully client-side app with no centralized server nor analytics
 
