@@ -21,6 +21,8 @@ public let BackgroundColor = LinearGradient(
 struct ContentView: View {
     @EnvironmentObject var player: PlayerCoordinator
     @EnvironmentObject var lastFM: LastFMSession
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var sharedDownload: SearchResult? = nil
     
     init() {
         let titleColor = UIColor(named: "PrimaryText")!
@@ -53,9 +55,42 @@ struct ContentView: View {
                 }
             }
         }
+        .sheet(
+            isPresented: Binding(
+                get: { sharedDownload != nil },
+                set: { if !$0 { sharedDownload = nil } }
+            )
+        ) {
+            DownloadScreen(
+                onDownloaded: { meta in
+                    player.startPlayback(libraryItem: LibraryItem(meta: meta), filePath: meta.path)
+                },
+                selectedResult: $sharedDownload,
+                clearSelectionOnFailure: false
+            )
+            .background(BackgroundColor.ignoresSafeArea(.all))
+        }
         .tint(Color("PrimaryBg"))
         .onAppear {
             player.attach(lastFM: lastFM)
+        }
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            guard phase == .active else { return }
+            guard let url = SharedURL.take() else { return }
+            player.close()
+            sharedDownload = SearchResult(
+                title: url,
+                artists: ["Raw URL"],
+                url: url,
+                views: nil,
+                duration: nil,
+                isExplicit: nil,
+                isVerified: nil,
+                thumbnailURL: nil,
+                thumbnailIsSquare: nil,
+                thumbnailWidth: nil,
+                thumbnailHeight: nil
+            )
         }
         .tabViewBottomAccessory {
             if player.canShowPlayer == true, let libraryItem = player.libraryItem {
