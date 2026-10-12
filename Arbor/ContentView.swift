@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import SPIndicator
 
 public let BackgroundColor = LinearGradient(
     gradient: Gradient(colors: [
@@ -21,6 +22,8 @@ public let BackgroundColor = LinearGradient(
 struct ContentView: View {
     @EnvironmentObject var player: PlayerCoordinator
     @EnvironmentObject var lastFM: LastFMSession
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.modelContext) private var modelContext
     
     init() {
         let titleColor = UIColor(named: "PrimaryText")!
@@ -56,6 +59,10 @@ struct ContentView: View {
         .tint(Color("PrimaryBg"))
         .onAppear {
             player.attach(lastFM: lastFM)
+        }
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            guard phase == .active else { return }
+            SharedURLQueue.takeAll().forEach(downloadSharedURL)
         }
         .tabViewBottomAccessory {
             if player.canShowPlayer == true, let libraryItem = player.libraryItem {
@@ -137,6 +144,37 @@ struct ContentView: View {
                 
             } else {
                 EmptyView()
+            }
+        }
+    }
+
+    // Downloads a URL shared via the share extension straight into the library
+    private func downloadSharedURL(_ url: String) {
+        SPIndicatorView(
+            title: "Downloading",
+            message: url,
+            preset: .custom(UIImage(systemName: "arrow.down.circle")!)
+        ).present()
+
+        AudioDownloader.download(from: url) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let meta):
+                    let _ = ensureLocalAudioFile(
+                        originalUrl: meta.original_url,
+                        sourcePath: meta.path,
+                        title: meta.title,
+                        artists: meta.artists
+                    )
+                    modelContext.insert(LibraryItem(meta: meta))
+                    SPIndicatorView(title: "Added to Library", message: meta.title, preset: .done).present()
+
+                case .failure:
+                    showAlert(
+                        title: "Download Failed",
+                        message: "Failed to download \(url).\n\nIf the problem persists, try updating the dependencies in Settings."
+                    )
+                }
             }
         }
     }
