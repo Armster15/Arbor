@@ -8,7 +8,6 @@
 import SwiftUI
 import SwiftData
 import UIKit
-import SPIndicator
 
 public let BackgroundColor = LinearGradient(
     gradient: Gradient(colors: [
@@ -23,7 +22,7 @@ struct ContentView: View {
     @EnvironmentObject var player: PlayerCoordinator
     @EnvironmentObject var lastFM: LastFMSession
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.modelContext) private var modelContext
+    @State private var sharedDownload: SearchResult? = nil
     
     init() {
         let titleColor = UIColor(named: "PrimaryText")!
@@ -56,13 +55,42 @@ struct ContentView: View {
                 }
             }
         }
+        .sheet(
+            isPresented: Binding(
+                get: { sharedDownload != nil },
+                set: { if !$0 { sharedDownload = nil } }
+            )
+        ) {
+            DownloadScreen(
+                onDownloaded: { meta in
+                    player.startPlayback(libraryItem: LibraryItem(meta: meta), filePath: meta.path)
+                },
+                selectedResult: $sharedDownload,
+                clearSelectionOnFailure: false
+            )
+            .background(BackgroundColor.ignoresSafeArea(.all))
+        }
         .tint(Color("PrimaryBg"))
         .onAppear {
             player.attach(lastFM: lastFM)
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active else { return }
-            SharedURLQueue.takeAll().forEach(downloadSharedURL)
+            guard let url = SharedURL.take() else { return }
+            player.close()
+            sharedDownload = SearchResult(
+                title: url,
+                artists: ["Raw URL"],
+                url: url,
+                views: nil,
+                duration: nil,
+                isExplicit: nil,
+                isVerified: nil,
+                thumbnailURL: nil,
+                thumbnailIsSquare: nil,
+                thumbnailWidth: nil,
+                thumbnailHeight: nil
+            )
         }
         .tabViewBottomAccessory {
             if player.canShowPlayer == true, let libraryItem = player.libraryItem {
@@ -144,37 +172,6 @@ struct ContentView: View {
                 
             } else {
                 EmptyView()
-            }
-        }
-    }
-
-    // Downloads a URL shared via the share extension straight into the library
-    private func downloadSharedURL(_ url: String) {
-        SPIndicatorView(
-            title: "Downloading",
-            message: url,
-            preset: .custom(UIImage(systemName: "arrow.down.circle")!)
-        ).present()
-
-        AudioDownloader.download(from: url) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let meta):
-                    let _ = ensureLocalAudioFile(
-                        originalUrl: meta.original_url,
-                        sourcePath: meta.path,
-                        title: meta.title,
-                        artists: meta.artists
-                    )
-                    modelContext.insert(LibraryItem(meta: meta))
-                    SPIndicatorView(title: "Added to Library", message: meta.title, preset: .done).present()
-
-                case .failure:
-                    showAlert(
-                        title: "Download Failed",
-                        message: "Failed to download \(url).\n\nIf the problem persists, try updating the dependencies in Settings."
-                    )
-                }
             }
         }
     }

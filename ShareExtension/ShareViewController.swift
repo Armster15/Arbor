@@ -2,7 +2,7 @@
 //  ShareViewController.swift
 //  ShareExtension
 //
-//  Queues a shared link for download and opens Arbor, which performs the download.
+//  Hands a shared link to Arbor and opens it, which downloads and plays the link.
 //
 
 import UIKit
@@ -20,13 +20,13 @@ class ShareViewController: UIViewController {
             return
         }
 
-        SharedURLQueue.append(url.absoluteString)
+        SharedURL.set(url.absoluteString)
 
         openArbor { opened in
             if opened {
                 self.done()
             } else {
-                self.showMessage(title: "Added to Arbor", message: "It will download the next time you open Arbor.")
+                self.showMessage(title: "Added to Arbor", message: "It will play the next time you open Arbor.")
             }
         }
     }

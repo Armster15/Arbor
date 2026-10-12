@@ -75,7 +75,7 @@
 		DE5A0E0B2F90000000000005 /* Exceptions for "ShareExtension" folder in "Arbor" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				SharedURLQueue.swift,
+				SharedURL.swift,
 			);
 			target = 08C4FFE52EA1436F00F9F26C /* Arbor */;
 		};
