@@ -106,7 +106,10 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
         )
 
         webView = WKWebView(frame: .zero, configuration: configuration)
-        webView.customUserAgent = userAgent
+        // Google omits romanizations when the iPad app on Mac identifies itself as an iPhone.
+        if !ProcessInfo.processInfo.isiOSAppOnMac {
+            webView.customUserAgent = userAgent
+        }
         webView.navigationDelegate = self
     }
 
