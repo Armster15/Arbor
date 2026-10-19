@@ -15,34 +15,26 @@ private let payloadStableInterval: TimeInterval = 1
 private let romanizationWaitTimeout: TimeInterval = 5
 
 private enum TranslationLines {
-    // Private-use character that Google Translate preserves between lyric lines.
-    private static let separator = "\u{E000}"
+    private static let markerPattern = try! NSRegularExpression(pattern: #"\[(\d+)\]"#)
 
     static func encode(_ lines: [String]) -> String {
-        lines.joined(separator: "\n\(separator)\n")
+        lines.enumerated().map { "[\($0.offset + 1)] \($0.element)" }.joined(separator: "\n")
     }
 
-    static func decode(_ text: String, expectedLineCount: Int) -> [String] {
-        if text.contains(separator) {
-            let lines = text
-                .components(separatedBy: separator)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            guard lines.count != expectedLineCount else { return lines }
+    static func decode(_ text: String, expectedLineCount: Int) -> [String]? {
+        let text = text as NSString
+        let markers = markerPattern.matches(in: text as String, range: NSRange(location: 0, length: text.length))
+        guard markers.count == expectedLineCount else { return nil }
 
-            // Google can omit separators while preserving the original line breaks.
-            let expandedLines = lines.flatMap {
-                $0.replacingOccurrences(of: "\r\n", with: "\n")
-                    .replacingOccurrences(of: "\r", with: "\n")
-                    .components(separatedBy: "\n")
-            }
-            return expandedLines.count == expectedLineCount ? expandedLines : lines
+        var lines: [String] = []
+        for (index, marker) in markers.enumerated() {
+            guard text.substring(with: marker.range(at: 1)) == String(index + 1) else { return nil }
+            let start = NSMaxRange(marker.range)
+            let end = index + 1 < markers.count ? markers[index + 1].range.location : text.length
+            let line = text.substring(with: NSRange(location: start, length: end - start))
+            lines.append(line.trimmingCharacters(in: .whitespacesAndNewlines))
         }
-
-        return text
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-            .trimmingCharacters(in: .newlines)
-            .components(separatedBy: "\n")
+        return lines
     }
 }
 
@@ -179,58 +171,26 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
             return
         }
 
-        let translations = payload.translation.map { TranslationLines.decode($0, expectedLineCount: sourceLines.count) }
-        let romanizations = payload.romanization.map { TranslationLines.decode($0, expectedLineCount: sourceLines.count) }
+        let translations = payload.translation.flatMap { TranslationLines.decode($0, expectedLineCount: sourceLines.count) }
+        let romanizations = payload.romanization.flatMap { TranslationLines.decode($0, expectedLineCount: sourceLines.count) }
 
-        if let translations, let romanizations,
-           translations.count != sourceLines.count,
-           romanizations.count != sourceLines.count {
+        // A result must retain every numbered line in order before we can align it with timestamps.
+        if (payload.translation != nil && translations == nil)
+            || (payload.romanization != nil && romanizations == nil) {
             finish(.failed("""
-                Google Translate returned different numbers of translated and romanized lyric lines.
-                source: \(sourceLines.count), translated: \(translations.count), romanized: \(romanizations.count)
+                Google Translate did not preserve the numbered lyric lines.
+                Expected lines numbered 1 through \(sourceLines.count).
 
                 <SOURCE_LINES>
                 \(sourceLines.joined(separator: "\n"))
                 </SOURCE_LINES>
 
                 <TRANSLATED_LINES>
-                \(translations.joined(separator: "\n"))
+                \(payload.translation ?? "No translation returned")
                 </TRANSLATED_LINES>
 
                 <ROMANIZED_LINES>
-                \(romanizations.joined(separator: "\n"))
-                </ROMANIZED_LINES>
-                """))
-            return
-        }
-
-        if let translations, translations.count != sourceLines.count {
-            finish(.failed("""
-                Google Translate returned a different number of translated lyric lines.
-                source: \(sourceLines.count), translated: \(translations.count)
-
-                <SOURCE_LINES>
-                \(sourceLines.joined(separator: "\n"))
-                </SOURCE_LINES>
-
-                <TRANSLATED_LINES>
-                \(translations.joined(separator: "\n"))
-                </TRANSLATED_LINES>
-                """))
-            return
-        }
-
-        if let romanizations, romanizations.count != sourceLines.count {
-            finish(.failed("""
-                Google Translate returned a different number of romanized lyric lines.
-                source: \(sourceLines.count), romanized: \(romanizations.count)
-
-                <SOURCE_LINES>
-                \(sourceLines.joined(separator: "\n"))
-                </SOURCE_LINES>
-
-                <ROMANIZED_LINES>
-                \(romanizations.joined(separator: "\n"))
+                \(payload.romanization ?? "No romanization returned")
                 </ROMANIZED_LINES>
                 """))
             return
@@ -306,7 +266,7 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
     private static let extractionScript = """
 (() => {
     function extractText(selector) {
-        return Array.from(document.querySelectorAll(selector), element => element.innerText)
+        return Array.from(document.querySelectorAll(selector), element => element.textContent)
             .join(' ') || null
     }
 
@@ -322,6 +282,11 @@ private final class GoogleTranslateRequest: NSObject, WKNavigationDelegate, WKSc
     let translationStartedAt = null
 
     const timer = setInterval(() => {
+        // Google withholds source romanization while its editor is focused.
+        if (document.activeElement?.tagName === 'TEXTAREA') {
+            document.activeElement.blur()
+        }
+
         const now = Date.now()
         const payload = {
             romanization: extractText(romanizationSelector),
