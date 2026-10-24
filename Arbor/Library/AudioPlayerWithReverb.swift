@@ -123,13 +123,15 @@ final class AudioPlayerWithReverb {
         // Fade in over 300ms with exponential curve
         let effectiveCurrentTime = pendingSeekTarget ?? currentTime
         let justStarted = effectiveCurrentTime <= 0.05
-        if shouldRampVolume == true {
+        if shouldRampVolume {
             // ensure we start from silence to avoid click/pop at start/resume
             SAPlayer.shared.volume = 0.0
             SAPlayer.shared.play()
             let duration = (microFadeInPending || justStarted) ? 0.03 : 0.3
             rampVolume(from: 0.0, to: 1.0, duration: duration)
         } else {
+            volumeRampTimer?.invalidate()
+            volumeRampTimer = nil
             // required to override any race conditions where we may already be ramping the volume at some point
             SAPlayer.shared.volume = 1.0
             SAPlayer.shared.play()
@@ -154,6 +156,11 @@ final class AudioPlayerWithReverb {
     func seek(to seconds: Double) {
         lastSeekRequested = seconds
         lastSeekRequestTime = Date()
+        if SAPlayer.shared.usesBufferedOutput {
+            pendingSeekTarget = nil
+            SAPlayer.shared.seekTo(seconds: seconds)
+            return
+        }
         if isPlaying {
             if seconds <= 0.05 {
                 // Pause and re-seek to reset the timebase cleanly before resuming
@@ -236,6 +243,7 @@ final class AudioPlayerWithReverb {
         applyTimePitchParameters(speedRate: effects.speedRate, pitchCents: clamped)
         if effects.pitchCents != clamped {
             effects.pitchCents = clamped
+            SAPlayer.shared.audioModifiersDidChange()
         }
     }
     
@@ -245,6 +253,7 @@ final class AudioPlayerWithReverb {
         applyTimePitchParameters(speedRate: clamped, pitchCents: effects.pitchCents)
         if effects.speedRate != clamped {
             effects.speedRate = clamped
+            SAPlayer.shared.audioModifiersDidChange()
         }
         
         // Update Now Playing info with new playback rate
@@ -298,6 +307,7 @@ final class AudioPlayerWithReverb {
         }
         if effects.reverbMix != reverbNode.wetDryMix {
             effects.reverbMix = reverbNode.wetDryMix
+            SAPlayer.shared.audioModifiersDidChange()
         }
     }
 
