@@ -147,27 +147,34 @@ struct __PlayerScreen: View {
         
         let originalUrl = item.original_url
         
-        let absolutePath = ensureLocalAudioFile(
-            originalUrl: originalUrl,
-            sourcePath: filePath,
-            title: item.title,
-            artists: item.artists,
-            onMissingPhysicalFile: {
-                debugPrint("Deleting outdated library item: \(item.title)")
-                modelContext.delete(item)
+        do {
+            let absolutePath = try ensureLocalAudioFile(
+                originalUrl: originalUrl,
+                sourcePath: filePath,
+                title: item.title,
+                artists: item.artists,
+                onMissingPhysicalFile: {
+                    debugPrint("Deleting outdated library item: \(item.title)")
+                    modelContext.delete(item)
+                }
+            )
+
+            self.filePath = absolutePath
+
+            if SHOULD_COPY {
+                modelContext.insert(item)
             }
-        )
-        
-        self.filePath = absolutePath
-        
-        if SHOULD_COPY {
-            modelContext.insert(item)
+
+            // Track saved settings locally so isModified reflects the saved state
+            savedSpeedRate = audioPlayer.speedRate
+            savedPitchCents = audioPlayer.pitchCents
+            savedReverbMix = audioPlayer.reverbMix
+        } catch {
+            showAlert(
+                title: "Song Not Saved",
+                message: "Arbor could not copy the audio file. \(error.localizedDescription)"
+            )
         }
-        
-        // Track saved settings locally so isModified reflects the saved state
-        savedSpeedRate = audioPlayer.speedRate
-        savedPitchCents = audioPlayer.pitchCents
-        savedReverbMix = audioPlayer.reverbMix
     }
 
     var body: some View {

@@ -160,18 +160,25 @@ struct LibraryScreen: View {
             if let libraryItem = downloadingItem {
                 DownloadScreen(
                     onDownloaded: { meta in
-                        let _ = ensureLocalAudioFile(
-                            originalUrl: libraryItem.original_url,
-                            sourcePath: meta.path,
-                            title: libraryItem.title,
-                            artists: libraryItem.artists,
-                            onMissingPhysicalFile: {
-                                debugPrint("Deleting outdated library item: \(libraryItem.title)")
-                                modelContext.delete(libraryItem)
-                            }
-                        )
-                        
-                        player.startPlayback(libraryItem: libraryItem, filePath: meta.path)
+                        do {
+                            let absolutePath = try ensureLocalAudioFile(
+                                originalUrl: libraryItem.original_url,
+                                sourcePath: meta.path,
+                                title: libraryItem.title,
+                                artists: libraryItem.artists,
+                                onMissingPhysicalFile: {
+                                    debugPrint("Deleting outdated library item: \(libraryItem.title)")
+                                    modelContext.delete(libraryItem)
+                                }
+                            )
+
+                            player.startPlayback(libraryItem: libraryItem, filePath: absolutePath)
+                        } catch {
+                            showAlert(
+                                title: "Song Not Saved",
+                                message: "Arbor could not copy the audio file. \(error.localizedDescription)"
+                            )
+                        }
                     },
                     selectedResult: Binding(
                         get: { downloadSource },
