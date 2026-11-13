@@ -18,7 +18,7 @@
 		08C4FFFA2EA1461C00F9F26C /* Python.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 08C4FFF72EA1455D00F9F26C /* Python.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		08D35D592F08BD800026EEE2 /* CloudKitSyncMonitor in Frameworks */ = {isa = PBXBuildFile; productRef = 08D35D582F08BD800026EEE2 /* CloudKitSyncMonitor */; };
 		08D3D2AF2F06273500D65F2E /* SwiftAudioPlayer in Frameworks */ = {isa = PBXBuildFile; productRef = 08D3D2AE2F06273500D65F2E /* SwiftAudioPlayer */; };
-		266E36B0B15B61400CC540A5 /* LibraryLocalFileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24E1D4EE3718E13B65ED6580 /* LibraryLocalFileTests.swift */; };
+		266E36B0B15B61400CC540A5 /* LibraryLocalFile.test.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24E1D4EE3718E13B65ED6580 /* LibraryLocalFile.test.swift */; };
 		DE5A0E0B2F90000000000002 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DE5A0E0B2F90000000000001 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -70,7 +70,7 @@
 		087DB67A2F106DEB0092F72C /* requirements.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = requirements.txt; sourceTree = "<group>"; };
 		08C4FFE62EA1436F00F9F26C /* Arbor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Arbor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		08C4FFF72EA1455D00F9F26C /* Python.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Python.xcframework; sourceTree = "<group>"; };
-		24E1D4EE3718E13B65ED6580 /* LibraryLocalFileTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LibraryLocalFileTests.swift; sourceTree = "<group>"; };
+		24E1D4EE3718E13B65ED6580 /* LibraryLocalFile.test.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LibraryLocalFile.test.swift; sourceTree = "<group>"; };
 		DE5A0E0B2F90000000000001 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -177,7 +177,7 @@
 		252A9E6371D18FD0FBD03DCB /* ArborTests */ = {
 			isa = PBXGroup;
 			children = (
-				24E1D4EE3718E13B65ED6580 /* LibraryLocalFileTests.swift */,
+				24E1D4EE3718E13B65ED6580 /* LibraryLocalFile.test.swift */,
 			);
 			name = ArborTests;
 			path = ArborTests;
@@ -368,7 +368,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				266E36B0B15B61400CC540A5 /* LibraryLocalFileTests.swift in Sources */,
+				266E36B0B15B61400CC540A5 /* LibraryLocalFile.test.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
