@@ -110,6 +110,9 @@ public func ensureLocalAudioFile(
     
     let docsURL = URL.documentsDirectory
     let newURL = docsURL.appendingPathComponent(newName)
+
+    try FileManager.default.copyItem(at: sourceURL, to: newURL)
+
     let absolutePath = newURL.path
 
     // Store only the path relative to the Documents directory
@@ -119,8 +122,6 @@ public func ensureLocalAudioFile(
     )
     let model = LibraryLocalFile(originalUrl: originalUrl, relativePath: relativePath)
     saveLibraryLocalFile(model)
-
-    try FileManager.default.copyItem(at: sourceURL, to: newURL)
 
     debugPrint("Saved audio file to more permanent location: \(absolutePath)")
     
