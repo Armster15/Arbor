@@ -86,13 +86,14 @@ public func getLocalAudioFilePath(
 /// If a valid existing file is already saved, its path is returned. Otherwise,
 /// the file at `sourcePath` is copied into the app's Documents directory,
 /// a new `LibraryLocalFile` mapping is created, and the new path is returned.
+/// - Throws: The file-copy error when the source cannot be saved.
 public func ensureLocalAudioFile(
     originalUrl: String,
     sourcePath: String,
     title: String,
     artists: [String],
     onMissingPhysicalFile: (() -> Void)? = nil
-) -> String {
+) throws -> String {
     if let existingPath = getLocalAudioFilePath(
         originalUrl: originalUrl,
         onMissingPhysicalFile: onMissingPhysicalFile
@@ -110,7 +111,7 @@ public func ensureLocalAudioFile(
     let docsURL = URL.documentsDirectory
     let newURL = docsURL.appendingPathComponent(newName)
     
-    try? FileManager.default.copyItem(at: sourceURL, to: newURL)
+    try FileManager.default.copyItem(at: sourceURL, to: newURL)
     let absolutePath = newURL.path
     
     debugPrint("Saved audio file to more permanent location: \(absolutePath)")
