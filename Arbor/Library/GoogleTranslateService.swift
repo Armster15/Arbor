@@ -15,7 +15,8 @@ private let payloadStableInterval: TimeInterval = 1
 private let romanizationWaitTimeout: TimeInterval = 5
 
 private enum TranslationLines {
-    private static let markerPattern = try! NSRegularExpression(pattern: #"\[(\d+)\]"#)
+    // Google may insert whitespace inside the brackets when romanizing the source.
+    private static let markerPattern = try! NSRegularExpression(pattern: #"\[\s*(\d+)\s*\]"#)
 
     static func encode(_ lines: [String]) -> String {
         lines.enumerated().map { "[\($0.offset + 1)] \($0.element)" }.joined(separator: "\n")
