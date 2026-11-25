@@ -7,13 +7,6 @@
 
 import Foundation
 
-enum DownloadError: Error {
-    case invalidSelection
-    case emptyResult(log: String?)
-    case invalidResponse(log: String?)
-    case pythonFailed(log: String)
-}
-
 struct AudioDownloader {
     private struct DownloadResponse: Decodable {
         let result: String?
@@ -26,10 +19,6 @@ struct AudioDownloader {
         completion: @escaping (Result<DownloadMeta, Error>) -> Void
     ) {
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            completion(.failure(DownloadError.invalidSelection))
-            return
-        }
 
         if let existingPath = getLocalAudioFilePath(originalUrl: trimmed) {
             if let result = searchResult {
@@ -68,24 +57,24 @@ result = json.dumps({"result": result, "log": log})
             "result"
         ) { result in
             guard let output = result, !output.isEmpty else {
-                completion(.failure(DownloadError.emptyResult(log: nil)))
+                completion(.failure(ResponseWithLogError(type: .emptyResult, log: nil)))
                 return
             }
 
             guard let data = output.data(using: .utf8),
                   let response = try? JSONDecoder().decode(DownloadResponse.self, from: data) else {
-                completion(.failure(DownloadError.invalidResponse(log: output)))
+                completion(.failure(ResponseWithLogError(type: .invalidResponse, log: output)))
                 return
             }
 
             guard let resultJSON = response.result, !resultJSON.isEmpty else {
-                completion(.failure(DownloadError.pythonFailed(log: response.log)))
+                completion(.failure(ResponseWithLogError(type: .pythonFailed, log: response.log)))
                 return
             }
 
             guard let resultData = resultJSON.data(using: .utf8),
                   let meta = try? JSONDecoder().decode(DownloadMeta.self, from: resultData) else {
-                completion(.failure(DownloadError.invalidResponse(log: response.log)))
+                completion(.failure(ResponseWithLogError(type: .invalidResponse, log: response.log)))
                 return
             }
 
