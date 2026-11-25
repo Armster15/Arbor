@@ -142,3 +142,14 @@ struct SearchResult: Decodable, Equatable {
         case thumbnailHeight = "thumbnail_height"
     }
 }
+
+public struct ResponseWithLogError: Error {
+    let type: ResponseWithLogErrorType
+    let log: String?
+}
+
+public enum ResponseWithLogErrorType {
+    case emptyResult
+    case invalidResponse
+    case pythonFailed
+}

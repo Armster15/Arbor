@@ -37,6 +37,7 @@ struct DeveloperPythonReplScreen: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
+                    .foregroundStyle(Color("SecondaryText"))
                     .disabled(isRunning)
 
                     Button("Clear Output") {

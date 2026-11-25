@@ -12,15 +12,22 @@ enum SearchProvider: String, Hashable {
     case soundcloud
 }
 
+private struct SearchResponse: Decodable {
+    let result: String?
+    let log: String
+}
 
 struct SearchResultsView: View {
     let searchResults: [SearchResult]
     let searchQuery: String
     let isSearching: Bool
+    let searchError: ResponseWithLogError?
     let onResultSelected: (SearchResult) -> Void
     let onDismiss: () -> Void
+    let onRetrySearch: () -> Void
     @Binding var searchProvider: SearchProvider
     @State private var searchVisible: Bool = false
+    @State private var showSearchLogSheet = false
     
     var body: some View {
         let isSearchQueryURL = isValidURL(searchQuery)
@@ -80,6 +87,48 @@ struct SearchResultsView: View {
                     
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let searchError = searchError {
+                VStack(spacing: 24) {
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.magnifyingglass")
+                            .font(.system(size: 48))
+                            .foregroundColor(.secondary)
+                        
+                        VStack(spacing: 8) {
+                            Text("An error occurred while searching")
+                                .font(.title3)
+                                .foregroundColor(.secondary)
+                            
+                            Text("Your network connection may be down or you need to update the dependencies in Settings.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+
+                    HStack {
+                        Button("Retry") {
+                            onRetrySearch()
+                        }
+                            .buttonStyle(.borderedProminent)
+                            .foregroundStyle(Color("SecondaryText"))
+                        
+                        Button("View Logs") {
+                            showSearchLogSheet = true
+                        }
+                            .buttonStyle(.bordered)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .sheet(isPresented: $showSearchLogSheet) {
+                    NavigationStack {
+                        LogViewer(
+                            title: "View Logs",
+                            logText: searchError.log,
+                            showClose: true
+                        )
+                    }
+                }
             } else if searchResults.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "magnifyingglass")
@@ -329,19 +378,16 @@ struct DownloadScreen: View {
                     var message: String
                     var logText: String? = nil
                     
-                    if let downloadError = error as? DownloadError {
-                        switch downloadError {
-                        case .invalidSelection:
-                            message = "Invalid selection."
-                        case .emptyResult(let log):
+                    if let downloadError = error as? ResponseWithLogError {
+                        logText = downloadError.log
+                        
+                        switch downloadError.type {
+                        case .emptyResult:
                             message = "Failed to download audio. Please check the URL and try again."
-                            logText = log
-                        case .invalidResponse(let log):
+                        case .invalidResponse:
                             message = "Invalid response from downloader."
-                            logText = log
-                        case .pythonFailed(let log):
+                        case .pythonFailed:
                             message = "Failed to download audio. Please check the URL and try again."
-                            logText = log
                         }
                     } else {
                         message = "Failed to download audio. Please check the URL and try again."
@@ -368,6 +414,7 @@ struct SearchScreen: View {
     @State private var searchResults: [SearchResult] = []
     @State private var searchIsActive = false
     @State private var isSearching = false
+    @State private var searchError: ResponseWithLogError? = nil
     @State private var currentSearchTaskId: UUID = UUID()
     @State private var searchDebounceTimer: Timer?
     @AppStorage("homeScreenSearchProvider") var searchProvider: SearchProvider = .youtube
@@ -381,18 +428,24 @@ struct SearchScreen: View {
                     searchResults: searchResults,
                     searchQuery: searchQuery,
                     isSearching: isSearching,
+                    searchError: searchError,
                     onResultSelected: { result in
                         selectedResult = result
                         searchIsActive = false
                         searchQuery = ""
                         searchResults = []
                         isSearching = false
+                        searchError = nil
                     },
                     onDismiss: {
                         searchIsActive = false
                         searchQuery = ""
                         searchResults = []
                         isSearching = false
+                        searchError = nil
+                    },
+                    onRetrySearch: {
+                        performSearch()
                     },
                     searchProvider: $searchProvider
                 )
@@ -420,6 +473,7 @@ struct SearchScreen: View {
                 // Cancel any pending search and clear results immediately
                 searchResults = []
                 isSearching = false
+                searchError = nil
                 searchDebounceTimer?.invalidate()
                 searchDebounceTimer = nil
             } else {
@@ -440,6 +494,7 @@ struct SearchScreen: View {
                 searchQuery = ""
                 searchResults = []
                 isSearching = false
+                searchError = nil
                 searchDebounceTimer?.invalidate()
                 searchDebounceTimer = nil
             }
@@ -452,6 +507,7 @@ struct SearchScreen: View {
     
     private func performDebouncedSearch() {
         isSearching = true
+        searchError = nil
         searchDebounceTimer?.invalidate()
         searchDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
             performSearch()
@@ -478,6 +534,7 @@ struct SearchScreen: View {
         if let cached: [SearchResult] = QueryCache.shared.get(for: cacheKey) {
             searchResults = cached
             isSearching = false
+            searchError = nil
             return
         }
 
@@ -485,6 +542,7 @@ struct SearchScreen: View {
         let taskId = UUID()
         currentSearchTaskId = taskId
         isSearching = true
+        searchError = nil
 
         // Escape backslashes and single quotes for safe embedding in Python string literal
         let escaped = trimmed
@@ -495,13 +553,17 @@ struct SearchScreen: View {
         switch searchProvider {
         case .youtube:
             code = """
-from arbor import search_youtube
-result = search_youtube('\(escaped)')
+import json
+from arbor import capture_logs, search_youtube
+result, log = capture_logs(search_youtube, '\(escaped)')
+result = json.dumps({"result": result, "log": log})
 """
         case .soundcloud:
             code = """
-from arbor import search_soundcloud
-result = search_soundcloud('\(escaped)')
+import json
+from arbor import capture_logs, search_soundcloud
+result, log = capture_logs(search_soundcloud, '\(escaped)')
+result = json.dumps({"result": result, "log": log})
 """
         }
 
@@ -513,19 +575,46 @@ result = search_soundcloud('\(escaped)')
                 if taskId == currentSearchTaskId {
                     isSearching = false
                 }
-             }
-             
-            guard let output = result, !output.isEmpty,
-                  let data = output.data(using: .utf8),
-                  let items = try? JSONDecoder().decode([SearchResult].self, from: data) else {
-                // silently ignore and clear suggestions on failure
-                
+            }
+
+            // ensure result is not empty
+            guard let output = result, !output.isEmpty else {
                 if taskId == currentSearchTaskId {
                     searchResults = []
+                    searchError = ResponseWithLogError(type: .emptyResult, log: nil)
                 }
-                
                 return
             }
+
+            // parse {result: xx, log: xx}
+            guard let data = output.data(using: .utf8),
+                  let response = try? JSONDecoder().decode(SearchResponse.self, from: data) else {
+                if taskId == currentSearchTaskId {
+                    searchResults = []
+                    searchError = ResponseWithLogError(type: .invalidResponse, log: output)
+                }
+                return
+            }
+             
+            // validate inner result object is not null
+            guard let resultJSON = response.result, !resultJSON.isEmpty else {
+                if taskId == currentSearchTaskId {
+                    searchResults = []
+                    searchError = ResponseWithLogError(type: .pythonFailed, log: response.log)
+                }
+                return
+            }
+
+            // parse inner result object
+            guard let resultData = resultJSON.data(using: .utf8),
+                  let items = try? JSONDecoder().decode([SearchResult].self, from: resultData) else {
+                if taskId == currentSearchTaskId {
+                    searchResults = []
+                    searchError = ResponseWithLogError(type: .invalidResponse, log: response.log)
+                }
+                return
+            }
+
             
             QueryCache.shared.set(items, for: cacheKey)
 
