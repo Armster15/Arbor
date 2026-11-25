@@ -6,6 +6,7 @@
 import SwiftUI
 import SDWebImage
 import SDWebImageSwiftUI
+import SPIndicator
 
 enum SearchProvider: String, Hashable {
     case youtube
@@ -88,7 +89,7 @@ struct SearchResultsView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let searchError = searchError {
-                VStack(spacing: 24) {
+                VStack(spacing: 32) {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.magnifyingglass")
                             .font(.system(size: 48))
@@ -106,7 +107,7 @@ struct SearchResultsView: View {
                         }
                     }
 
-                    HStack {
+                    HStack(spacing: 12) {
                         Button("Retry") {
                             onRetrySearch()
                         }
@@ -296,6 +297,57 @@ struct DownloadScreen: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+
+            else if showDownloadErrorAlert {
+                VStack(spacing: 32) {
+                    VStack(spacing: 16) {
+                        Image(systemName: "arrow.down.circle.badge.xmark.fill")
+                            .font(.system(size: 48))
+                            .foregroundColor(.secondary)
+                        
+                        VStack(spacing: 8) {
+                            Text("Download Failed")
+                                .font(.title3)
+                                .foregroundColor(.secondary)
+                            
+                            Text(downloadErrorMessage)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+
+                    HStack(spacing: 12) {
+                        Button("Retry") {
+                            activeDownloadID = nil
+                            triggerDownloadIfPossible() { success in
+                                if !success {
+                                    SPIndicatorView(title: "Failed to retry", preset: .error).present()
+                                }
+                            }
+                        }
+                            .buttonStyle(.borderedProminent)
+                            .foregroundStyle(Color("SecondaryText"))
+                        
+                        if downloadLogText?.isEmpty == false {
+                            Button("View Logs") {
+                                showDownloadLogSheet = true
+                            }
+                                .buttonStyle(.bordered)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .sheet(isPresented: $showDownloadLogSheet) {
+                    NavigationStack {
+                        LogViewer(
+                            title: "View Logs",
+                            logText: downloadLogText,
+                            showClose: true
+                        )
+                    }
+                }
+            }
             
             else {
                 VStack(spacing: 16) {
@@ -318,25 +370,6 @@ struct DownloadScreen: View {
             }
         }
         .padding()
-        .alert("Download Failed", isPresented: $showDownloadErrorAlert) {
-            if downloadLogText?.isEmpty == false {
-                Button("View Logs") {
-                    showDownloadLogSheet = true
-                }
-            }
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(downloadErrorMessage)
-        }
-        .sheet(isPresented: $showDownloadLogSheet) {
-            NavigationStack {
-                LogViewer(
-                    title: "View Logs",
-                    logText: downloadLogText,
-                    showClose: true
-                )
-            }
-        }
         .onAppear {
             triggerDownloadIfPossible()
         }
@@ -349,10 +382,19 @@ struct DownloadScreen: View {
         }
     }
     
-    private func triggerDownloadIfPossible() {
-        guard !isLoading, let url = selectedResult?.url else { return }
+    private func triggerDownloadIfPossible(completion: ((Bool) -> Void)? = nil) {
+        guard !isLoading, let url = selectedResult?.url else { 
+            completion?(false)
+            return 
+        }
+
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else { 
+            completion?(false)
+            return 
+        }
+
+        completion?(true)
         downloadAudio(with: trimmed)
     }
     
@@ -383,17 +425,17 @@ struct DownloadScreen: View {
                         
                         switch downloadError.type {
                         case .emptyResult:
-                            message = "Failed to download audio. Please check the URL and try again."
+                            message = "Please check the URL and try again."
                         case .invalidResponse:
                             message = "Invalid response from downloader."
                         case .pythonFailed:
-                            message = "Failed to download audio. Please check the URL and try again."
+                            message = "Please check the URL and try again."
                         }
                     } else {
-                        message = "Failed to download audio. Please check the URL and try again."
+                        message = "Please check the URL and try again."
                     }
 
-                    message += "\n\nIf the problem persists, try updating the dependencies in Settings."
+                    message += "\nIf the problem persists, try updating the dependencies in Settings."
 
                     downloadErrorMessage = message
                     downloadLogText = logText
