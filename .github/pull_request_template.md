@@ -1,2 +1,2 @@
 > [!NOTE]
-> This PR was purely written by Codex
+> This PR's code and description were purely written by Codex
